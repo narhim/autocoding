@@ -1,4 +1,5 @@
 import preprocessing
+import myparser
 
 from typing import List, Optional
 import warnings
@@ -23,6 +24,10 @@ def main():
         "https://www.cms.gov/Medicare/Coding/ICD10/Downloads/2019-ICD-10-CM-Code-Descriptions.zip",
         "https://www.cms.gov/Medicare/Coding/ICD10/Downloads/2019-ICD-10-CM-Tables-and-Index.zip",
     )
+    #G_icd10cm_2019, codes_icd10cm_2019 = preprocessing.build_icd10_hierarchy_from_url(
+    #    "https://www.openagrar.de/servlets/MCRFileNodeServlet/openagrar_derivate_00019621/nts-icd.zip"
+    #    "https://www.openagrar.de/servlets/MCRFileNodeServlet/openagrar_derivate_00021578/nts_icd.zip"
+    #)
     #For the moment we don't need this, but might in the future.
     #G_icd10cm_2020, codes_icd10cm_2020 = build_icd10_hierarchy_from_url(
     #    "https://www.cms.gov/Medicare/Coding/ICD10/Downloads/2020-ICD-10-CM-Codes.zip",
@@ -46,12 +51,20 @@ def main():
             }
             json.dump(j, f) #Converts j in a proper json format and dumps it into the file f.
 
+    clef = myparser.GermanICD10Hierarchy() #ger ICD10 codes in dict_tree and dict_par2child
+    clef_codes = clef.get_dataset_codes() #clefcodes
+    de_icd_10_tree = clef.rebuild_tree() #clef tree
+    name = 'clef-icd-10-hierarchy.json'
+    x = clef.parse_icd10()
+    #print(x)
+    #root_node, *_ = nx.topological_sort(clef_tree)
+    #with open(outdir/name,"w") as f:
+    #    #ger_j = {
+        #        "tree": nx.readwrite.json_graph.tree_data(clef_tree, root_node), #Returns data in tree format that is suitable for JSON serialization and use in Javascript documents.
+        #        "codes": sorted(clef_codes), #Sort the codes
+        #    }
+        #json.dump(de_icd_10_tree,f)
 
-    #Obtain codes from train/dev split
-    codes = set()
-    with open('clef2019/train_dev/anns_train_dev.txt') as f:
-        codes = codes.union(set('|'.join([l.split('\t')[-1] for l in f.read().splitlines()[1:]]).split('|')))
-    codes = {c for c in codes if c}
 
 
 if __name__ == "__main__":
