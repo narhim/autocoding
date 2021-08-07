@@ -8,6 +8,7 @@ import json
 from sklearn.preprocessing import MultiLabelBinarizer
 from collections import Counter
 from pathlib import Path
+import pandas as pd
 
 
 def cl_parser(argv=None):
@@ -96,8 +97,8 @@ class Preprocess:
             doc_id, labels = doc_labels.split("\t")
             labels = labels.split("|")
             self.doc_label_dict[doc_id] = labels
-            if self.args.partition == "training":
-                self.class_counter.update(labels)
+            # if self.args.partition == "training":
+            self.class_counter.update(labels)
 
     def _extract_doc(self, doc_id):
         """
@@ -143,7 +144,7 @@ class Preprocess:
             out_file_dir.mkdir(parents=True, exist_ok=False)
             print(f"{out_file_dir} created to store pre-processed files.")
         except FileExistsError:
-            print(f"{out_file_dir} alreay exists!")
+            print(f"{out_file_dir} already exists!")
 
         json_file_path = out_file_dir / f"{self.args.partition}.json"
         write_to_json(self.docs_labels_list, json_file_path)
@@ -154,11 +155,149 @@ class Preprocess:
         print(f"Pre-processed {self.args.data_dir} {self.args.partition} partition saved to {json_file_path}.")
 
 
+class PreprocessGuttman(Preprocess):
+    def __init__(self, args):
+        super(PreprocessGuttman, self).__init__(args)
+        self.data_dir = self.data_root_dir
+        self.ids_file_path = self.data_dir / f"output.txt"
+        self.annotation_file_path = self.data_dir / f"output.txt"
+        self.docs_dir = self.data_dir / f"annotation_Conny_final_npwd.xlsm"
+
+        # Guttman specific attributes
+        self.num_docs = 0
+        self.num_patients = 0
+        self.num_missing_qualifier_docs = 0
+        self.id_to_concept = dict()
+        self.concept_to_id = dict()
+        self.pt_to_concept_id = dict()
+        self.present_concepts = Counter()
+        self.mentioned_absent = Counter()
+        self.mentioned_unknown_concepts = Counter()
+        self.missing_qualifier_concepts = Counter()
+        self.doc_id_to_doc_texts = self._extract_doc_texts()
+
+    def _extract_doc_texts(self):
+        """
+
+        :return: dict mapping doc_id to doc text; doc_id == patientID_noteNumber e.g. "5333328_0"
+        """
+        excel_file = pd.ExcelFile(self.docs_dir)
+        return {sheet_name: excel_file.parse(sheet_name=sheet_name, usecols="B", header=None).iloc[0][1]
+                for sheet_name in excel_file.sheet_names}
+
+    def _get_id_concept(self, id_concept_line, delimiter='|'):
+        """
+
+        :param id_concept_line:
+        :param delimiter:
+        :return:
+        """
+        id, concept, *qualifier = id_concept_line.split(delimiter)
+        id = id.strip()
+        concept = concept.strip()
+        self.id_to_concept[id] = concept
+        self.concept_to_id[concept] = id
+        return id, concept
+
+    def _update_id_concept(self, id_concept_line, p_id, n_num, delimiter='|'):
+        """
+
+        :param id_concept_line:
+        :param p_id:
+        :param n_num:
+        :param delimiter:
+        :return:
+        """
+        id, concept = self._get_id_concept(id_concept_line, delimiter)
+        self.pt_to_concept_id[p_id][n_num].add(id)
+        self.doc_label_dict[f"{p_id}_{n_num}"].add(id)
+        return id, concept
+
+    def _extract_ids(self):
+        for line in lines_from_file(self.ids_file_path):
+            if line:
+                # pt id line, in format: #######_#
+                if '_' in line and '|' not in line:
+                    yield line
+
+    def _extract_annotation(self):
+        pt_id, note_num = 0, 0
+        for line in lines_from_file(self.annotation_file_path):
+            if line:
+                # pt id line, in format: #######_#
+                if '_' in line and '|' not in line:
+                    # print(f'pt id: {line}')
+                    self.num_docs += 1
+                    pt_id, note_num = line.split('_')
+                    if not self.pt_to_concept_id.get(pt_id):
+                        self.num_patients += 1
+                        self.pt_to_concept_id[pt_id] = dict()
+                        self.pt_to_concept_id[pt_id][note_num] = set()
+                    else:
+                        self.pt_to_concept_id[pt_id][note_num] = set()
+                    self.doc_label_dict[f"{pt_id}_{note_num}"] = set()
+                    continue
+
+                # only 1 concept in line
+                if ';' not in line:
+                    if 'present' in line or '410515003' in line:
+                        id, _ = self._update_id_concept(line, pt_id, note_num)
+                        self.class_counter.update([id])
+                        continue
+                    elif 'Unknown' in line or '261665006' in line:
+                        id, _ = self._get_id_concept(line)
+                        self.mentioned_unknown_concepts.update([id])
+                        continue
+                    elif 'absent' in line or '410516002' in line:
+                        id, _ = self._get_id_concept(line)
+                        self.mentioned_absent.update([id])
+                        continue
+                    else:
+                        print(f'Some other type of qualifier??? in line:\n'
+                              f'{line}, pt ID: {pt_id}_{note_num}')
+                        id, _ = self._get_id_concept(line)
+                        self.missing_qualifier_concepts.update([id])
+                        self.num_missing_qualifier_docs += 1
+
+                elif ';' in line:
+                    # more than 1 concept in line, ';' delimited
+                    for concept_line in line.split(';'):
+                        if 'present' in concept_line or '410515003' in concept_line:
+                            id, _ = self._update_id_concept(concept_line, pt_id, note_num)
+                        elif 'Unknown' in concept_line or '261665006' in concept_line:
+                            id, _ = self._get_id_concept(concept_line)
+                            self.mentioned_unknown_concepts.update([id])
+                        elif 'absent' in concept_line or '410516002' in concept_line:
+                            id, _ = self._get_id_concept(concept_line)
+                            self.mentioned_absent.update([id])
+                        else:
+                            print(f'Some other type of qualifier??? in line:\n'
+                                  f'{concept_line}')
+                            id, _ = self._get_id_concept(concept_line)
+                            self.missing_qualifier_concepts.update([id])
+                            self.num_missing_qualifier_docs += 1
+                else:
+                    print(f'What is different about this line? Should not land here!!:\n'
+                          f'{line}')
+                    continue
+
+        # set to list in self.doc_label_dict
+        self.doc_label_dict = {doc_id: list(label_set) for doc_id, label_set in self.doc_label_dict.items()}
+
+    def _extract_doc(self, doc_id):
+        return self.doc_id_to_doc_texts[doc_id]
+
+
 def main():
     args = cl_parser()
-    # print(args)
-    clef_19_preprocess = Preprocess(args)
-    clef_19_preprocess.create_dataset_json()
+    print(args)
+    # clef_19_preprocess = Preprocess(args)
+    # clef_19_preprocess.create_dataset_json()
+    args.data_dir = "guttman"
+    args.partition = "all"
+    print(args)
+    guttmann_preprocess = PreprocessGuttman(args)
+    guttmann_preprocess.create_dataset_json()
 
 
 if __name__ == '__main__':
