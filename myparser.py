@@ -158,7 +158,7 @@ class GermanICD10Hierarchy:
 
         def recurse_chapter_tree(chapter_elem):
             ul = chapter_elem.find("ul")
-            codes = {}
+            codes = {} #{'Z00-Z13': {'subgroups': None}, 'Z20-Z29': {'subgroups': None}, 'Z30-Z39': {'subgroups': None}, 'Z40-Z54': {'subgroups': None}, 'Z55-Z65': {'subgroups': None}, 'Z70-Z76': {'subgroups': None}, 'Z80-Z99': {'subgroups': None}}  
             if ul is not None:
                 # get direct child only
                 ul = ul.find_all(recursive=False)
@@ -176,10 +176,10 @@ class GermanICD10Hierarchy:
 
         for chapter in chapters:
             # chapter code and title
-            chap_h2 = chapter.find("h2").text[:-9]
-            chap_code = chap_h2.strip("()")
-            chap_title = prefix_re.sub("", chap_h2)
-            chap_num = prefix_re.search(chap_h2).groupdict()['chapnum']
+            chap_h2 = chapter.find("h2").text[:-9] #Kapitel IINeubildungen
+            chap_code = chap_h2.strip("()") #Kapitel IINeubildungen
+            chap_title = prefix_re.sub("", chap_h2) #Neubildungen 
+            chap_num = prefix_re.search(chap_h2).groupdict()['chapnum'] #II 
             if chap_num == "XIXV":
                 # small fix for "XIXVerletzungen .." V is part of word
                 chap_num = "XIX"
@@ -189,24 +189,24 @@ class GermanICD10Hierarchy:
                 # "code": chap_code,
                 "subgroups": recurse_chapter_tree(chapter)
             }
-            self.code2title[chap_num] = chap_title
+            self.code2title[chap_num] = chap_title #When finished:{'I': 'Bestimmte infektiöse und parasitäre Krankheiten', 'II': 'Neubildungen'...
 
 
     def link_nodes(self):
         self.parent2childs = dict()
-#
+
         def set_parent2childs(d):
             for k, v in d.items():
                 if k not in ("subgroups"):
                     if v["subgroups"] is not None:
                         self.parent2childs[k] = set(v["subgroups"].keys())
                         set_parent2childs(v["subgroups"])
-#
+
         set_parent2childs(self.tree)
         
         def update_parent2childs():
             parent2childs = copy.deepcopy(self.parent2childs)
-#
+
             def get_all_descendants(parent, childs):
                 temp_childs = copy.deepcopy(childs)
                 for childi in temp_childs:
@@ -215,7 +215,7 @@ class GermanICD10Hierarchy:
                         # recurse till leaf nodes
                         get_all_descendants(childi, parent2childs[childi])
                         parent2childs[parent].update(parent2childs[childi])
-#
+
             for parent, childs in self.parent2childs.items():
                 get_all_descendants(parent, childs)
 
@@ -225,7 +225,7 @@ class GermanICD10Hierarchy:
 
         # get reversed mapping
         self.child2parents = defaultdict(set)
-#
+
         for parent, childs in self.parent2childs.items():
             for childi in childs:
                 self.child2parents[childi].add(parent)
@@ -248,6 +248,7 @@ class GermanICD10Hierarchy:
         def recursively_fill_dict(icd10tree):
             parents = icd10tree.keys()
             for parent in parents:
+                #print(parent)
                 children = icd10tree[parent]['subgroups']
                 if children is not None:
                     tree[parent] = list(children.keys())
@@ -256,28 +257,26 @@ class GermanICD10Hierarchy:
         return tree
     def parse_icd10(self):
         tree = self.rebuild_tree()
-        #print(tree)
         tree['root'] = list(self.tree.keys())
-        #print(tree)
-        #save(tree, os.path.join(self.hier_data_path, 'parent2children_tree.p'))
-        #child2parent_dict = {}
-        #for parent, children in tree.items():
-        #    for child in children:
-        #        child2parent_dict[child] = parent
-        #save(child2parent_dict, os.path.join(self.hier_data_path, 'child2parent.p'))
-#
-#        #all_codes = set(tree.keys()).union(set([i for j in tree.values() for i in j]))
-#        #idx2code = {i: code for i, code in enumerate(all_codes)}
-#        #code2idx = {v: k for k, v in idx2code.items()}
-#
-#        #with open(os.path.join(self.hier_data_path, 'icd10hierarchy.txt'), 'w') as f:
-#        #    for parent, children in tree.items():
-#        #        for child in children:
-#        #            f.write(str(code2idx[parent]) + ' ' + str(code2idx[child]) + '\n')
-#        #save(idx2code, os.path.join(self.hier_data_path, 'idx2icd10.p'))
-#        #save(code2idx, os.path.join(self.hier_data_path, 'icd102idx.p'))
-#        #try:
-#        #    assert self.get_dataset_codes().issubset(set(all_codes))
-#        #except:
-#        #    print("The following codes from the dataset are not in the hierarchy:")
-        #    print(set(self.get_dataset_codes()) - set(all_codes))
+        save(tree, os.path.join(self.hier_data_path, 'parent2children_tree.p'))
+        child2parent_dict = {}
+        for parent, children in tree.items():
+            for child in children:
+                child2parent_dict[child] = parent
+        save(child2parent_dict, os.path.join(self.hier_data_path, 'child2parent.p'))
+
+        all_codes = set(tree.keys()).union(set([i for j in tree.values() for i in j]))
+        idx2code = {i: code for i, code in enumerate(all_codes)}
+        code2idx = {v: k for k, v in idx2code.items()}
+
+        with open(os.path.join(self.hier_data_path, 'icd10hierarchy.txt'), 'w') as f:
+            for parent, children in tree.items():
+                for child in children:
+                    f.write(str(code2idx[parent]) + ' ' + str(code2idx[child]) + '\n')
+        save(idx2code, os.path.join(self.hier_data_path, 'idx2icd10.p'))
+        save(code2idx, os.path.join(self.hier_data_path, 'icd102idx.p'))
+        try:
+            assert self.get_dataset_codes().issubset(set(all_codes))
+        except:
+            print("The following codes from the dataset are not in the hierarchy:")
+            print(set(self.get_dataset_codes()) - set(all_codes))
