@@ -2,6 +2,7 @@
 This preprocessing script is adapted from https://github.com/kathrynchapman/LA_MC2C/blob/main/process_data.py
 to read clef2019 (german), cantemist, codiEsp, and gutman datasets and output in <train/dev/test>.json files.
 """
+# TODO: clean up and add comments
 
 import argparse
 import json
@@ -268,7 +269,7 @@ class Preprocess:
         if not self.unseen_labels or other_args.force_rerun:
             self.unseen_labels = [label for label in self.class_counter.keys() if label not in
                                   another_preprocessed_partition.class_counter.keys()]
-        #print(
+        # print(
         #    f"this partition: \n{self.class_counter.keys()} vs train:\n{another_preprocessed_partition.class_counter.keys()}")
         return self.unseen_labels
 
@@ -482,14 +483,14 @@ class PreprocessGuttman(Preprocess):
 
                 # Get counts for each class
                 counts["train_counts"] = Counter(str(combination) for row in
-                                             get_combination_wise_output_matrix(training_bin_labels, order=1)
-                                             for combination in row)
+                                                 get_combination_wise_output_matrix(training_bin_labels, order=1)
+                                                 for combination in row)
                 counts["dev_counts"] = Counter(str(combination) for row in
-                                           get_combination_wise_output_matrix(dev_bin_labels, order=1)
-                                           for combination in row)
+                                               get_combination_wise_output_matrix(dev_bin_labels, order=1)
+                                               for combination in row)
                 counts["test_counts"] = Counter(str(combination) for row in
-                                            get_combination_wise_output_matrix(testing_bin_labels, order=1)
-                                            for combination in row)
+                                                get_combination_wise_output_matrix(testing_bin_labels, order=1)
+                                                for combination in row)
 
                 dist_df = pd.DataFrame({
                     "train": counts["train_counts"],
@@ -509,9 +510,9 @@ class PreprocessGuttman(Preprocess):
                     test_labels = testing_bin_labels
 
         print(f"best seed: {best_seed}\n"
-              f"train: {len(training_docs_indices)} ({len(training_docs_indices)/len(doc_ids):.2f})\n"
-              f"dev: {len(dev_docs_indices)} ({len(dev_docs_indices)/len(doc_ids):.2f})\n"
-              f"test: {len(testing_docs_indices)} ({len(testing_docs_indices)/len(doc_ids):.2f})\n"
+              f"train: {len(training_docs_indices)} ({len(training_docs_indices) / len(doc_ids):.2f})\n"
+              f"dev: {len(dev_docs_indices)} ({len(dev_docs_indices) / len(doc_ids):.2f})\n"
+              f"test: {len(testing_docs_indices)} ({len(testing_docs_indices) / len(doc_ids):.2f})\n"
               f"lowest cls distribution std: {lowest_std}")
 
         self.partitions["training"] = training_docs_indices
@@ -525,7 +526,7 @@ class PreprocessGuttman(Preprocess):
         return best_seed, lowest_std
 
     def write_partition_files(self, partition_name="test", random_state=35):
-        # for training/development need to store both training/development under train_dev
+        # for training/development; store both training/development under train_dev
         cl_partition = partition_name
 
         if partition_name != "test":
@@ -535,7 +536,8 @@ class PreprocessGuttman(Preprocess):
             seed, std = self.get_train_development_test(random_state=random_state)
             print(f"partitions generated with random seed: {seed} -- class distribution st.dev: {std}\n")
 
-        assert len(self.partitions[cl_partition]) == len(self.partitions_labels[cl_partition]), f"Docs - Labels Mismatch!!"
+        assert len(self.partitions[cl_partition]) == len(
+            self.partitions_labels[cl_partition]), f"Docs - Labels Mismatch!!"
         try:
             partition_dir = self.data_dir / partition_name
             partition_dir.mkdir(parents=True, exist_ok=False)
@@ -550,7 +552,6 @@ class PreprocessGuttman(Preprocess):
             print(f"{partition_doc_dir} created to store {partition_name} docs files.")
         except FileExistsError:
             print(f"{partition_doc_dir} already exists! Files will be saved here.")
-
 
         if partition_name == "test":
             ids_file_path = partition_dir / f"ids_{partition_name}.txt"
@@ -576,7 +577,7 @@ class PreprocessGuttman(Preprocess):
                 decoded_label_str = "|".join([str(label[0]) for label in decoded_label])
                 out_ann_file.write(f"{partition_doc_id}\t{decoded_label_str}\n")
 
-                #write doc text in /docs
+                # write doc text in /docs
                 with open(partition_doc_dir / f"{partition_doc_id}.txt", mode="w", encoding="utf-8") as doc_out_file:
                     try:
                         doc_text = self.doc_id_to_doc_texts[partition_doc_id]
@@ -586,12 +587,8 @@ class PreprocessGuttman(Preprocess):
                     doc_out_file.write(doc_text)
 
 
-
-    # TODO: guttman writing partitions to .json, plot each partition,check for unseen classes in test/dev
-
-
 def main():
-    # testing guttman preprocessing
+    # testing parts of guttman preprocessing; use run_preprocesss.py for preprocessing
     args = cl_parser()
     print(args)
 
