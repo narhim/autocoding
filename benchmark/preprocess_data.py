@@ -12,9 +12,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from argparse import Namespace
-
+from iterative_stratification import IterativeStratification, iterative_train_test_split
+from skmultilearn.model_selection.measures import get_combination_wise_output_matrix
 
 def cl_parser(argv=None):
     """
@@ -110,6 +111,12 @@ class Preprocess:
         self.docs_labels_list = []
         self.num_docs = 0
         self.unseen_labels = []
+
+    def __len__(self):
+        if not self.docs_labels_list:
+            self.make_docs_labels_list()
+
+        return len(self.docs_labels_list)
 
     def _extract_ids(self):
         yield from lines_from_file(self.ids_file_path)
@@ -404,45 +411,114 @@ class PreprocessGuttman(Preprocess):
     def _extract_doc(self, doc_id):
         return self.doc_id_to_doc_texts[doc_id]
 
-    def get_ids_and_binary_labels(self):
+    def _get_ids_and_binary_labels(self):
         if not self.docs_labels_list:
             self.make_docs_labels_list()
 
         labels = [d['labels_id'] for d in self.docs_labels_list]
-        doc_ids = [d['ids'] for d in self.docs_labels_list]
+        doc_ids = [d['id'] for d in self.docs_labels_list]
 
         binarized_labels = self.mlb.fit_transform(labels)
 
         return doc_ids, binarized_labels
 
-    # TODO: guttman stratified partitions
+    def get_train_development_test(self, random_state=None):
+        """
+        Create 500/250/84 train/development/test splits (0.6/0.3/0.1) that has the most optimal
+        class distribution as observed in the whole dataset.
+
+        1. perform iterative stratification to split train/test and then train/development
+        2. calculation the counts per classes in train, development, and test partitions for each iteration
+        3. choose the iteration that has the lowest standard deviation among the classes
+
+        :param random_state:
+        :return:
+        """
+        doc_ids, binarized_labels = self._get_ids_and_binary_labels()
+        if not isinstance(doc_ids, np.ndarray):
+            doc_ids = np.array(doc_ids)
+
+        if not random_state:
+            random_state = 0
+
+        best_seed, lowest_std = 0, 100
+        training_docs_indices, dev_docs_indices, testing_docs_indices = None, None, None
+        training_labels, development_labels, test_labels = None, None, None
+
+        for seed in trange(random_state, random_state + 10):
+            k_folds = IterativeStratification(n_splits=10, order=1, random_state=seed, shuffle=True)
+            for i, (train_idx, test_idx) in enumerate(k_folds.split(doc_ids, binarized_labels)):
+                counts = dict()
+                training_doc_ids, training_bin_labels = doc_ids[[train_idx]], binarized_labels[tuple([train_idx])]
+                testing_doc_ids, testing_bin_labels = doc_ids[[test_idx]], binarized_labels[tuple([test_idx])]
+
+                training_doc_ids, training_bin_labels, dev_doc_ids, dev_bin_labels = \
+                    iterative_train_test_split(training_doc_ids, training_bin_labels, test_size=0.32, random_state=seed,
+                                               shuffle=True)
+
+                # print(f"seed: {seed} -- fold: {i}\n"
+                #      f"train: {len(training_doc_ids)} ({len(training_doc_ids)/len(doc_ids):.2f})\n"
+                #      f"dev: {len(dev_doc_ids)} ({len(dev_doc_ids)/len(doc_ids):.2f})\n"
+                #      f"test: {len(testing_doc_ids)} ({len(testing_doc_ids)/len(doc_ids):.2f})")
+
+                # Get counts for each class
+                counts["train_counts"] = Counter(str(combination) for row in
+                                             get_combination_wise_output_matrix(training_bin_labels, order=1)
+                                             for combination in row)
+                counts["dev_counts"] = Counter(str(combination) for row in
+                                           get_combination_wise_output_matrix(dev_bin_labels, order=1)
+                                           for combination in row)
+                counts["test_counts"] = Counter(str(combination) for row in
+                                            get_combination_wise_output_matrix(testing_bin_labels, order=1)
+                                            for combination in row)
+
+                dist_df = pd.DataFrame({
+                    "train": counts["train_counts"],
+                    "dev": counts["dev_counts"],
+                    "test": counts["test_counts"]
+                }).T.fillna(0)
+                fold_std = np.mean(np.std(dist_df.to_numpy(), axis=0))
+
+                if fold_std < lowest_std:
+                    print(f"this fold: {i}'s st.dev: {fold_std}")
+                    print(f"saving best partitions...")
+                    lowest_std = fold_std
+                    best_seed = seed
+                    training_docs_indices, dev_docs_indices = training_doc_ids, dev_doc_ids
+                    testing_docs_indices = testing_doc_ids
+                    training_labels, development_labels = training_bin_labels, dev_bin_labels
+                    test_labels = testing_bin_labels
+
+        print(f"best seed: {best_seed}\n"
+              f"train: {len(training_docs_indices)} ({len(training_docs_indices)/len(doc_ids):.2f})\n"
+              f"dev: {len(dev_docs_indices)} ({len(dev_docs_indices)/len(doc_ids):.2f})\n"
+              f"test: {len(testing_docs_indices)} ({len(testing_docs_indices)/len(doc_ids):.2f})\n"
+              f"lowest cls distribution std: {lowest_std}")
+
+        partition, partition_labels = dict(), dict()
+        partition["training"] = training_docs_indices
+        partition["development"] = dev_docs_indices
+        partition["test"] = testing_docs_indices
+
+        partition_labels["training"] = training_labels
+        partition_labels["development"] = development_labels
+        partition_labels["test"] = test_labels
+
+        return partition, partition_labels, best_seed, lowest_std
+
+    # TODO: guttman writing partitions to .json, plot each partition,check for unseen classes in test/dev
 
 
 def main():
     args = cl_parser()
     print(args)
-    clef_19_preprocess = Preprocess(args)
-    clef_19_preprocess.create_dataset_json()
-    clef_19_preprocess.plot_label_distribution()
 
-    compared_args = Namespace(**vars(args))
-    if args.partition != "training":
-        compared_args.partition = "training"
-    else:
-        compared_args.partition = "test"
-        second_compared_args = Namespace(**vars(args))
-        second_compared_args.partition = "development"
-
-    print(compared_args)
-    clef_19_preprocess.write_unseen_labels(compared_args)
-    if args.partition == "training":
-        print(second_compared_args)
-        clef_19_preprocess.write_unseen_labels(second_compared_args)
-
-    # args.data_dir = "guttman"
-    # args.partition = "all"
-    # print(args)
-    # guttmann_preprocess = PreprocessGuttman(args)
+    args.data_dir = "guttman"
+    args.partition = "all"
+    print(args)
+    guttmann_preprocess = PreprocessGuttman(args)
+    print(len(guttmann_preprocess))
+    partition, labels, seed, std = guttmann_preprocess.get_train_development_test(35)
     # guttmann_preprocess.create_dataset_json()
     # guttmann_preprocess.plot_label_distribution()
 
