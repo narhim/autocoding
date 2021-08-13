@@ -130,8 +130,18 @@ class Preprocess:
         :return:
         """
         for doc_labels in lines_from_file(self.annotation_file_path):
-            doc_id, labels = doc_labels.split("\t")
-            labels = labels.split("|")
+            try:
+                doc_id, labels = doc_labels.split("\t")
+            except ValueError:
+                # empty labels
+                print(f"Empty labels in {doc_id}")
+                doc_id, *labels = doc_labels.split("\t")
+            try:
+                labels = labels.split("|")
+            except AttributeError:
+                print(f"Empty labels cannot be split at |")
+                # empty labels
+                labels = []
             self.doc_label_dict[doc_id] = labels
             # if self.args.partition == "training":
             self.class_counter.update(labels)
