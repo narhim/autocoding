@@ -14,8 +14,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm, trange
 from argparse import Namespace
+# ***IMPORTANT*** import the iterative_stratification from this repo and not the installed skmultilearn library!!!
 from iterative_stratification import IterativeStratification, iterative_train_test_split
 from skmultilearn.model_selection.measures import get_combination_wise_output_matrix
+
 
 def cl_parser(argv=None):
     """
@@ -299,6 +301,8 @@ class PreprocessGuttman(Preprocess):
         self.mentioned_unknown_concepts = Counter()
         self.missing_qualifier_concepts = Counter()
         self.doc_id_to_doc_texts = self._extract_doc_texts()
+        self.partitions = dict()
+        self.partitions_labels = dict()
 
     def _extract_doc_texts(self):
         """
@@ -422,7 +426,7 @@ class PreprocessGuttman(Preprocess):
 
         return doc_ids, binarized_labels
 
-    def get_train_development_test(self, random_state=None):
+    def get_train_development_test(self, random_state=None, lowest_std=100):
         """
         Create 500/250/84 train/development/test splits (0.6/0.3/0.1) that has the most optimal
         class distribution as observed in the whole dataset.
@@ -430,6 +434,10 @@ class PreprocessGuttman(Preprocess):
         1. perform iterative stratification to split train/test and then train/development
         2. calculation the counts per classes in train, development, and test partitions for each iteration
         3. choose the iteration that has the lowest standard deviation among the classes
+        4. save the doc ids and labels for train/development/test partitions in the same format as clef2019
+        e.g. guttman/test/anns_test.txt contains \t separated doc_ids   label1|label2|lebel3
+        guttman/test/ids_test.txt contains 1 doc_id per line
+
 
         :param random_state:
         :return:
@@ -441,7 +449,7 @@ class PreprocessGuttman(Preprocess):
         if not random_state:
             random_state = 0
 
-        best_seed, lowest_std = 0, 100
+        best_seed = random_state
         training_docs_indices, dev_docs_indices, testing_docs_indices = None, None, None
         training_labels, development_labels, test_labels = None, None, None
 
@@ -480,7 +488,7 @@ class PreprocessGuttman(Preprocess):
                 fold_std = np.mean(np.std(dist_df.to_numpy(), axis=0))
 
                 if fold_std < lowest_std:
-                    print(f"this fold: {i}'s st.dev: {fold_std}")
+                    print(f"\nthis fold: {i}'s st.dev: {fold_std}")
                     print(f"saving best partitions...")
                     lowest_std = fold_std
                     best_seed = seed
@@ -495,21 +503,84 @@ class PreprocessGuttman(Preprocess):
               f"test: {len(testing_docs_indices)} ({len(testing_docs_indices)/len(doc_ids):.2f})\n"
               f"lowest cls distribution std: {lowest_std}")
 
-        partition, partition_labels = dict(), dict()
-        partition["training"] = training_docs_indices
-        partition["development"] = dev_docs_indices
-        partition["test"] = testing_docs_indices
+        self.partitions["training"] = training_docs_indices
+        self.partitions["development"] = dev_docs_indices
+        self.partitions["test"] = testing_docs_indices
 
-        partition_labels["training"] = training_labels
-        partition_labels["development"] = development_labels
-        partition_labels["test"] = test_labels
+        self.partitions_labels["training"] = training_labels
+        self.partitions_labels["development"] = development_labels
+        self.partitions_labels["test"] = test_labels
 
-        return partition, partition_labels, best_seed, lowest_std
+        return best_seed, lowest_std
+
+    def write_partition_files(self, partition_name="test", random_state=35):
+        # for training/development need to store both training/development under train_dev
+        cl_partition = partition_name
+
+        if partition_name != "test":
+            partition_name = "train_dev"
+
+        if not self.partitions or not self.partitions_labels:
+            seed, std = self.get_train_development_test(random_state=random_state)
+            print(f"partitions generated with random seed: {seed} -- class distribution st.dev: {std}\n")
+
+        assert len(self.partitions[cl_partition]) == len(self.partitions_labels[cl_partition]), f"Docs - Labels Mismatch!!"
+        try:
+            partition_dir = self.data_dir / partition_name
+            partition_dir.mkdir(parents=True, exist_ok=False)
+            print(f"{partition_dir} created to store {partition_name} files.")
+        except FileExistsError:
+            print(f"{partition_dir} already exists! Files will be saved here.")
+
+        try:
+            partition_doc_dir = self.data_dir / partition_name / "docs" if partition_name == "test" \
+                else self.data_dir / partition_name / "docs-training"
+            partition_doc_dir.mkdir(parents=True, exist_ok=False)
+            print(f"{partition_doc_dir} created to store {partition_name} docs files.")
+        except FileExistsError:
+            print(f"{partition_doc_dir} already exists! Files will be saved here.")
+
+
+        if partition_name == "test":
+            ids_file_path = partition_dir / f"ids_{partition_name}.txt"
+        else:
+            ids_file_path = partition_dir / f"ids_{cl_partition}.txt"
+
+        anns_file_path = partition_dir / f"anns_{partition_name}.txt"
+
+        # write ids_{partition}.txt
+        if partition_name == "test":
+            write_to_file(self.partitions[partition_name], ids_file_path)
+        else:
+            # training/development
+            write_to_file(self.partitions[cl_partition], ids_file_path)
+
+        # write anns_test.txt
+        # for train/dev if file exists it will append to it as both partitions write to the same file!
+        with open(anns_file_path, mode="w" if partition_name == "test" else "a", encoding="utf-8") as out_ann_file:
+            for partition_doc_id, partition_label in tqdm(zip(self.partitions[cl_partition],
+                                                              self.partitions_labels[cl_partition]),
+                                                          desc=f"writing {cl_partition} files"):
+                decoded_label = self.mlb.classes_[np.argwhere(partition_label == 1)]
+                decoded_label_str = "|".join([str(label[0]) for label in decoded_label])
+                out_ann_file.write(f"{partition_doc_id}\t{decoded_label_str}\n")
+
+                #write doc text in /docs
+                with open(partition_doc_dir / f"{partition_doc_id}.txt", mode="w", encoding="utf-8") as doc_out_file:
+                    try:
+                        doc_text = self.doc_id_to_doc_texts[partition_doc_id]
+                    except KeyError:
+                        print(f"Unable to locate text for this doc id!!! Something is wrong!")
+                        doc_text = ""
+                    doc_out_file.write(doc_text)
+
+
 
     # TODO: guttman writing partitions to .json, plot each partition,check for unseen classes in test/dev
 
 
 def main():
+    # testing guttman preprocessing
     args = cl_parser()
     print(args)
 
@@ -518,9 +589,11 @@ def main():
     print(args)
     guttmann_preprocess = PreprocessGuttman(args)
     print(len(guttmann_preprocess))
-    partition, labels, seed, std = guttmann_preprocess.get_train_development_test(35)
-    # guttmann_preprocess.create_dataset_json()
-    # guttmann_preprocess.plot_label_distribution()
+    guttmann_preprocess.create_dataset_json()
+    guttmann_preprocess.plot_label_distribution()
+    guttmann_preprocess.write_partition_files(partition_name="test")
+    guttmann_preprocess.write_partition_files(partition_name="training")
+    guttmann_preprocess.write_partition_files(partition_name="development")
 
 
 if __name__ == '__main__':
