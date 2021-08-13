@@ -3,6 +3,7 @@ This preprocessing script is adapted from https://github.com/kathrynchapman/LA_M
 to read clef2019 (german), cantemist, codiEsp, and gutman datasets and output in <train/dev/test>.json files.
 """
 # TODO: clean up and add comments
+# TODO: SNOMED CT CODE in labels to description mapping file/dict pickle
 
 import argparse
 import json

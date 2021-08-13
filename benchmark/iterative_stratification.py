@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 This is a modification of the iterative_stratification.py in the skmultilearn library
-to fix the random_state reproducibility issue.
+to fix the random_state reproducibility issue discussed here: https://github.com/scikit-multilearn/scikit-multilearn/issues/144
 
 Iterative stratification for multi-label data
 The classifier follows methods outlined in Sechidis11 and Szymanski17 papers related to stratyfing
