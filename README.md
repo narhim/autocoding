@@ -22,5 +22,6 @@
 file to be _non-password-protected_ locally.  
 - The pre-processing script assumes both the ``annotation_Conny_final.xlsm`` and ``output.txt`` files are
 in the same directory (benchmark/guttman/<both files should be in here>)
-- The script will generate a <train/dev/test>.json
-inside the ``preprocessed/guttman`` directory.
+- *in progress:* The script will generate a <train/dev/test>.json inside the ``preprocessed/guttman`` directory.
+- random seed: 38
+- train: 501 (0.60), dev: 246 (0.30), test: 87 (0.10), total 834 samples.
