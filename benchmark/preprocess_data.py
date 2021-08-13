@@ -41,6 +41,7 @@ def cl_parser(argv=None):
     parser.add_argument("--output_dir", type=str, default="preprocessed")
     parser.add_argument("--plot", type=bool, default=True)
     parser.add_argument("--force_rerun", type=bool, default=False)
+    parser.add_argument("--random_state", type=int, default=35)
 
     return parser.parse_args(argv)
 

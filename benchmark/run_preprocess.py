@@ -33,9 +33,9 @@ def main():
             print(f"{len(guttmann_preprocess)} documents")
             guttmann_preprocess.create_dataset_json()
             guttmann_preprocess.plot_label_distribution()
-            guttmann_preprocess.write_partition_files(partition_name="test")
-            guttmann_preprocess.write_partition_files(partition_name="training")
-            guttmann_preprocess.write_partition_files(partition_name="development")
+            guttmann_preprocess.write_partition_files(partition_name="test", random_state=args.random_state)
+            guttmann_preprocess.write_partition_files(partition_name="training", random_state=args.random_state)
+            guttmann_preprocess.write_partition_files(partition_name="development", random_state=args.random_state)
         else:
             guttman_postprocess = Preprocess(args)
             guttman_postprocess.create_dataset_json()
