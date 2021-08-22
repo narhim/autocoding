@@ -61,6 +61,7 @@ class GermanICD10Hierarchy:
         self.tree = dict()
         self.code2title = dict()
         self.dict_sections = {}
+        self.dict_links = {}
 
         def recurse_chapter_tree(chapter_elem):
             ul = chapter_elem.find("ul")
@@ -76,6 +77,7 @@ class GermanICD10Hierarchy:
                         "subgroups": uli_codes if uli_codes else None
                     }
                     self.dict_sections[uli.a.text] = uli.a["title"]
+                    self.dict_links[uli.a.text] = uli.a["href"]
                     # self.code2title[uli.a.text] = uli.a["title"]
             return codes
 
@@ -174,15 +176,79 @@ class GermanICD10Hierarchy:
         save(code2idx, os.path.join(self.hier_data_path, 'icd102idx.p'))
 
 
+    def get_single_codes(self):
+        out_sections = []
+        for k,v in self.tree.items():
+            l = list(v.values())
+            for li in l:
+                for section,subsection in li.items():
+                    if subsection['subgroups'] != None:
+                        out_sections.append(section)
+                        #try:
+                        for sub,value in subsection.items():
+                            for s,v in value.items():
+                                #print(type(v.values()))
+                                #if v.values() != [None]:
+                                    #print(v.values())
+                                for f,t in v.items():
+                                    if t != None:
+                                        out_sections.append(s)
+
+        for out in out_sections:
+            self.dict_links.pop(out)
+
+        self.dict_sect_single = {}
+
+        category1 = re.compile("[A-Z][0-9]{2}$") #U80
+        category2 = re.compile("[A-Z][0-9]{2}\.[0-9]$") #U80.0
+        category3 = re.compile("[A-Z][0-9]{2}\.[0-9]{2}$") #U80.00
+        node_cat1 = " "
+        node_cat2 = " "
+        node_cat3 = " "
+
+        for key,value in self.dict_links.items():                                 
+            url = "https://www.dimdi.de/static/de/klassifikationen/icd/icd-10-gm/kode-suche/htmlgm2016/" + value
+
+            rget = requests.get(url)
+            soup = BeautifulSoup(rget.text, "lxml")
+            w = soup.findAll("a", {"class": "code"})
+            y = soup.findAll("span", {"class": "label"})#BUG: already here the encoding disappears, don't know why.
+
+            S = nx.DiGraph()
+            section = key
+            S.add_node(section)
+
+            for s,z in zip(w,y):
+                #single_codes.append((s["id"],z.text)) # U81 \n U82 \n U82.0
+                if re.match(category1,s["id"]):
+                    node_cat1 = s["id"]
+                    S.add_node(node_cat1,description = z.text)
+                    S.add_edge(section,node_cat1)
+                elif re.match(category2,s["id"]):
+                    node_cat2 = s["id"]
+                    S.add_node(node_cat2,description = z.text)
+                    S.add_edge(node_cat1,node_cat2)
+                else:
+                    node_cat3 = s["id"]
+                    S.add_node(node_cat3,description = z.text)
+                    S.add_edge(node_cat2,node_cat3)
+            
+            self.dict_sect_single[key] = S
 
     def build_graph(self):
+        '''Method to build a hierarchicl graph of all the chapters, 
+        sections and codes with their descriptions 
+        from the trees build previously'''
+
+        self.get_single_codes() #Runs the method to get the specific codes for each section (category1, category2...).
         chap_list = []
         for k in self.code2title.keys():
-            chap_list.append((k,{"title":self.code2title[k]}))
+            chap_list.append((k,{"title":self.code2title[k]})) #Transform de code2title dict into a list of tuples to build the graph more easily.
+        #Initialize the graph    
         G = nx.DiGraph()
         root_name = "root"
         G.add_node(root_name)
-        G.add_nodes_from(chap_list)
+        G.add_nodes_from(chap_list) # Get nodes with attributes from chap_list
         for pair in chap_list:
             G.add_edge(root_name,pair[0])
         for k,v in self.tree.items():
@@ -200,10 +266,17 @@ class GermanICD10Hierarchy:
                                     for w in x.values():
                                         for y,z in w.items():
                                             G.add_node(y,title=self.dict_sections[y])
-                                            G.add_edge(sub,y)
-        with open("icd-10-gm.json", "w") as f:
+                                            G.add_edge(sub,y)      
+        for value in self.dict_sect_single.values():
+            G = nx.compose(value,G)
+        with open("icd-10-gm.json", "w",encoding='UTF-8') as f:
             j = {"tree":nx.readwrite.json_graph.tree_data(G, root_name)}
-            json.dump(j, f,indent=1,ensure_ascii=False)
+            json.dump(j, f,indent=2,ensure_ascii=False)
+        # Its important to use binary mode
+        dbfile = open('icd-10-gm.p', 'ab') 
+        # source, destination
+        pickle.dump(j, dbfile)                     
+        dbfile.close()
 
 if __name__ == '__main__':
     gen = GermanICD10Hierarchy()
