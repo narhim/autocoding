@@ -44,7 +44,7 @@ import math
 class cantemist_codes:
 
 	def coding_codes(self,dataset_path,file):
-		'''Methods that gets the codes for a specific dataset.'''
+		''' Method that get the codes for one subset of the coding task.'''
 
 		codes = set()
 		with open(dataset_path + file) as f:
@@ -52,6 +52,7 @@ class cantemist_codes:
 		return codes
 
 	def norm_codes(self,dataset_path):
+		''' Method that get the codes for one subset of the norm task.'''
 		files = []
 		for r, d, f in os.walk(dataset_path):
 			for file in f:
@@ -70,8 +71,8 @@ class cantemist_codes:
 
 class cantemist_hierarchy:
 	def __init__(self):
-		self.hierarchy_path = "data/hierarchical_data/sp/"
-		self.hierarchy_file = "icd-o-sp.json"
+		self.hierarchy_path = "data/hierarchical_data/sp/" #Location of hierarchy
+		self.hierarchy_file = "icd-o-sp.json" #Name of hierarchy
 		self.retrieve_hierarchy_json()
 		self.get_chapters_section()
 
@@ -83,7 +84,7 @@ class cantemist_hierarchy:
 
 
 	def get_chapters_section(self):
-		'''Get the chapters and sections from the hierarchy to later on build the dataset hierarchy (dataset only has chapters and sections).'''
+		'''Get the chapters, sections and subsections from the hierarchy to later on build the dataset hierarchy.'''
 		self.chapters = list(self.H.neighbors("root"))
 		self.sections = []
 		self.subsections = []
@@ -97,22 +98,22 @@ class cantemist_hierarchy:
 
 
 	def build_graph_dataset(self,codes):
-		'''Method that builds a directed graph for the dataset specificied, also returns codes for possible comparison purposes.'''
+		'''Method that builds a directed graph for the dataset specificied, also returns a list of the codes in dataset but not in H.'''
 		
-		G = self.H
+		G = self.H #Rename it to be safe.
 		for subsection in self.subsections:
 			if (subsection not in codes) and (subsection in list(G.nodes())):
-				G.remove_node(subsection)
+				G.remove_node(subsection) #Start by removing final nodes not in dataset.
 
 		for section in self.sections:
 			if section in list(G.nodes()):
 				if section not in codes and len(list(G.neighbors(section))) == 0:
-					G.remove_node(section)
+					G.remove_node(section) #Remove intermediate nodes not in dataset and without any children.
 
 		for node in list(G.nodes()):
 			if node not in codes:
 				if len(list(G.neighbors(node))) == 0:
-					G.remove_node(node)
+					G.remove_node(node) #Remove superior nodes not in dataset and with no children.
 		codes_not_in_H = []
 		for code in codes:
 			if code not in list(G.nodes()):
@@ -126,7 +127,6 @@ class cantemist_hierarchy:
 
 	def out_graph(self,graph,out_path,out_file):
 		''' Method that saves a directed graph in a json and a pickle file. '''
-		#Specific to graph
 		if not os.path.exists(out_path):
 			os.makedirs(out_path)
 		with open(out_path + out_file + ".json", "w",encoding='UTF-8') as f:
@@ -139,6 +139,7 @@ class cantemist_hierarchy:
 		dbfile.close()
 
 def write_list(list_codes,task,out_path,out_file):
+	'''Function that writes a list in a txt. file, used for unseen codes.'''
 	with open(out_path + out_file, "w",encoding='UTF-8') as f:
 		f.write("Codes not in hierarchy from task " + task + "\n")
 		for code in list_codes:

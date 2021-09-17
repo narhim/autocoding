@@ -42,9 +42,9 @@ from networkx.algorithms.traversal.depth_first_search import dfs_tree
 import math
 
 class clef2019_hierarchy:
-	def __init__(self,hierarchy_dir,hierarchy_file):
-		self.hierarchy_path = hierarchy_dir
-		self.hierarchy_file = hierarchy_file
+	def __init__(self):
+		self.hierarchy_path = "data/hierarchical_data/de/"
+		self.hierarchy_file = "icd10gm_2016.json"
 		self.retrieve_hierarchy_json()
 		self.get_chapters_section()
 
@@ -121,6 +121,8 @@ class clef2019_hierarchy:
 	def out_graph(self,graph,out_path,out_file):
 		''' Method that saves a directed graph in a json and a pickle file. '''
 		#Specific to graph
+		if not os.path.exists(out_path):
+			os.makedirs(out_path)
 		with open(out_path + out_file + ".json", "w",encoding='UTF-8') as f:
 		            root_node, *_ = nx.topological_sort(graph)
 		            j = {"tree":nx.readwrite.json_graph.tree_data(graph, root_node)}
@@ -141,77 +143,20 @@ class clef2019_hierarchy:
 
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
-	parser.add_argument(
-	    "--hierarchy_dir",
-	    default="data/hierarchical_data/de/",
-	    type=str,
-	    help="Directory for json hierarchy files",
-	)
-	parser.add_argument(
-	    "--hierarchy_file",
-	    default="icd10gm_2016.json",
-	    type=str,
-	    help="json hierarchy file",
-	)
-	parser.add_argument(
-	    "--dataset_path",
-	    default="clef2019/",
-	    type=str,
-	    help="Directory for dataset files",
-	)
-	parser.add_argument(
-	    "--train_dev_file",
-	    default="train_dev/anns_train_dev.txt",
-	    type=str,
-	    help="train_dev dataset",
-	)
-	parser.add_argument(
-	    "--test_file",
-	    default="test/anns_test.txt",
-	    type=str,
-	    help="test dataset",
-	)
-	parser.add_argument(
-	    "--output_dir",
-	    default="data/hierarchical_data/de/",
-	    type=str,
-	    help="Directory for output files",
-	)
-	parser.add_argument(
-	    "--out_file_train_dev",
-	    default="clef2019_train_dev",
-	    type=str,
-	    help="File name for train_dev dataset hierarchy outputs",
-	)
-	parser.add_argument(
-	    "--out_file_test",
-	    default="clef2019_test",
-	    type=str,
-	    help="File name for test dataset hierarchy outputs",
-	)
-	parser.add_argument(
-	    "--out_file_combine",
-	    default="clef2019",
-	    type=str,
-	    help="File name for dataset hierarchy outputs",
-	)
 
-	args = parser.parse_args()
-
-	gen = clef2019_hierarchy(args.hierarchy_dir,args.hierarchy_file)
+	gen = clef2019_hierarchy()
 
 	#Train_dev graph
-	train_dev_G,train_dev_codes = gen.build_graph_dataset(args.dataset_path,args.train_dev_file)
-	gen.out_graph(train_dev_G,args.output_dir,args.out_file_train_dev)
+	train_dev_G,train_dev_codes = gen.build_graph_dataset("clef2019/","train_dev/anns_train_dev.txt")
+	gen.out_graph(train_dev_G,"data/hierarchical_data/de/clef2019/","clef2019_train_dev")
 
 	#Test graph
-	test_G, test_codes = gen.build_graph_dataset(args.dataset_path,args.test_file)
-	gen.out_graph(test_G,args.output_dir,args.out_file_test)
+	test_G, test_codes = gen.build_graph_dataset("clef2019/","test/anns_test.txt")
+	gen.out_graph(test_G,"data/hierarchical_data/de/clef2019/","clef2019_test")
 	
 	#All graph
 	test_train_dev_G = gen.combine_graphs(train_dev_G,test_G)
-	gen.out_graph(test_train_dev_G,args.output_dir,args.out_file_combine)
+	gen.out_graph(test_train_dev_G,"data/hierarchical_data/de/clef2019/","clef2019")
 
 
 

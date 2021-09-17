@@ -43,13 +43,12 @@ import math
 
 class GermanICD10Hierarchy:
 
-    def __init__(self,args):
-        self.args = args
-        self.url = self.args.url
-        self.file_name = self.args.file_name
+    def __init__(self):
+        self.url = "https://www.dimdi.de/static/de/klassifikationen/icd/icd-10-gm/kode-suche/htmlgm2016/"
+        self.file_name = "icd10gm_2016"
         self.build_tree()
         self.link_nodes()
-        self.hier_data_path = self.args.output_dir
+        self.hier_data_path = "data/hierarchical_data/de/"
         if not os.path.exists(self.hier_data_path):
             os.makedirs(self.hier_data_path)
         self.parse_icd10()
@@ -205,7 +204,7 @@ class GermanICD10Hierarchy:
         category3 = re.compile("[A-Z][0-9]{2}\.[0-9]{2}$") #U80.00
 
         for section,href in self.dict_links.items():                                 
-            url = self.args.url + href
+            url = self.url + href
 
             rget = requests.get(url)
             soup = BeautifulSoup(rget.text, "lxml")
@@ -286,26 +285,5 @@ class GermanICD10Hierarchy:
         dbfile.close()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--url",
-        default="https://www.dimdi.de/static/de/klassifikationen/icd/icd-10-gm/kode-suche/htmlgm2021/",
-        type=str,
-        help="Url of ICD 10 German version",
-    )
-    parser.add_argument(
-        "--output_dir",
-        default="data/hierarchical_data",
-        type=str,
-        help="Directory for output files",
-    )
-    parser.add_argument(
-        "--file_name",
-        default="icd10-gm-2021",
-        type=str,
-        help="File name for hierarchy outputs",
-    )
-
-    args = parser.parse_args()
-    gen = GermanICD10Hierarchy(args)
+    gen = GermanICD10Hierarchy()
 
