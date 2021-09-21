@@ -1,4 +1,4 @@
-from preprocess_data import cl_parser, Preprocess, PreprocessGuttman, CodiespToClef2019
+from preprocess_data import cl_parser, Preprocess, PreprocessGuttman, CodiespToClef2019, PreprocessCodiesp
 from argparse import Namespace
 import sys
 
@@ -81,7 +81,28 @@ def main():
                 codi_clef = CodiespToClef2019(args)
                 codi_clef.copy_doc_files()
         else:
-            pass
+            args.data_dir = "codiesp_clef"
+            codiesp_preprocess = PreprocessCodiesp(args)
+            codiesp_preprocess.create_dataset_json()
+
+            # plotting label distribution and comparing labels between partitions
+            # since labels are identical in "esp" and "en" only do this for "esp"
+            if args.lang == "esp":
+                codiesp_preprocess.plot_label_distribution()
+
+                compared_args = Namespace(**vars(args))
+                if args.partition != "training":
+                    compared_args.partition = "training"
+                else:
+                    compared_args.partition = "test"
+                    second_compared_args = Namespace(**vars(args))
+                    second_compared_args.partition = "development"
+
+                print(compared_args)
+                codiesp_preprocess.write_unseen_labels(compared_args)
+                if args.partition == "training":
+                    print(second_compared_args)
+                    codiesp_preprocess.write_unseen_labels(second_compared_args)
     else:
         print(f"Invalid dataset option!")
 

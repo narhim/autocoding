@@ -235,7 +235,7 @@ class Preprocess:
             print(f"WARNING: json file not identical to original data!!!")
         print(f"Pre-processed {self.args.data_dir} {self.args.partition} partition saved to {json_file_path}.")
 
-    def plot_label_distribution(self, save_plot=True):
+    def plot_label_distribution(self, save_plot=True, show_plot=False):
         """
 
         Plot the frequency distribution of the labels in the dataset partition.
@@ -273,7 +273,8 @@ class Preprocess:
 
             outfile_path = plot_dir / f"{self.args.partition}_label_distribution.png"
             plt.savefig(outfile_path)
-        plt.show()
+        if show_plot:
+            plt.show()
 
     @classmethod
     def get_another_preprocessed_partition(cls, one_args, other_args):
@@ -621,6 +622,7 @@ class CodiespToClef2019:
     """
     Rewrite Codiesp corpus to Clef2019 format
     """
+
     def __init__(self, args=None):
         # arguments and paths
         self.args = args
@@ -744,12 +746,29 @@ class CodiespToClef2019:
                         shutil.copy(str(src_filepath), str(dest_filepath))
 
 
+class PreprocessCodiesp(Preprocess):
+    def __init__(self, args):
+        super(PreprocessCodiesp, self).__init__(args)
+        # overriding Preprocess attributes
+        self.annotation_file_path = self.data_dir / f"anns_{args.partition}{args.track}.txt" \
+            if args.partition == "test" else self.data_dir / f"anns_train_dev{args.track}.txt"
+        if args.lang == "esp":
+            self.docs_dir = self.data_dir / "docs" if args.partition == "test" else self.data_dir / "docs-training"
+        else:
+            self.docs_dir = self.data_dir / f"docs_{args.lang}" if args.partition == "test" \
+                else self.data_dir / f"docs-training-{args.lang}"
+        self.outfile_dir = Path(__file__).resolve().parent / self.args.output_dir / self.args.data_dir / \
+                           self.args.lang / self.args.track
+
+
 def main():
-    # testing parts of guttman preprocessing; use run_preprocesss.py for preprocessing
     args = cl_parser()
     args.data_dir = "codiesp"
     print(args)
 
+
+"""
+    # testing codiesp reformatting
     partitions = ["test", "dev", "train"]
     tracks = ["D", "P", "X"]
 
@@ -772,7 +791,7 @@ def main():
         args.partition = partition
         codi_clef = CodiespToClef2019(args)
         codi_clef.copy_doc_files()
-
+"""
 
 """
     args.data_dir = "guttman"
@@ -786,7 +805,6 @@ def main():
     guttmann_preprocess.write_partition_files(partition_name="training")
     guttmann_preprocess.write_partition_files(partition_name="development")
 """
-
 
 if __name__ == '__main__':
     main()
