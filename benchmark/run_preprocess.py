@@ -1,4 +1,4 @@
-from preprocess_data import cl_parser, Preprocess, PreprocessGuttman
+from preprocess_data import cl_parser, Preprocess, PreprocessGuttman, CodiespToClef2019
 from argparse import Namespace
 import sys
 
@@ -54,6 +54,34 @@ def main():
             if args.partition == "training":
                 print(second_compared_args)
                 guttman_postprocess.write_unseen_labels(second_compared_args)
+
+    elif args.data_dir == "codiesp":
+        if args.partition == "all":
+            print(f"Re-writing dataset to clef2019 format...")
+            partitions = ["test", "dev", "train"]
+            tracks = ["D", "P", "X"]
+
+            # making id and annotation files for all partitions and all track
+            # copying Spanish doc files for all partitions
+            for partition in partitions:
+                for track in tracks:
+                    args.partition = partition
+                    args.track = track
+                    print(args)
+                    codi_clef = CodiespToClef2019(args)
+                    if track == "D":
+                        codi_clef.write_doc_ids_to_file()
+                        codi_clef.copy_doc_files()
+                    codi_clef.write_annotation_file()
+
+            # copying English version doc files for all partitions
+            args.lang = "en"
+            for partition in partitions:
+                args.partition = partition
+                codi_clef = CodiespToClef2019(args)
+                codi_clef.copy_doc_files()
+        else:
+            pass
     else:
         print(f"Invalid dataset option!")
 

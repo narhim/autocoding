@@ -634,7 +634,15 @@ class CodiespToClef2019:
         self.out_root_dir = Path(__file__).resolve().parent / f"{args.data_dir}_clef"
         self.out_dir = self.out_root_dir / args.partition if args.partition == "test" \
             else self.out_root_dir / f"train_dev"
-        self.out_ids_file_path = self.out_dir / f"ids_{args.partition}.txt"
+
+        # naming convention to match clef2019 dataset
+        if args.partition == "test":
+            self.out_ids_file_path = self.out_dir / f"ids_{args.partition}.txt"
+        elif args.partition == "dev":
+            self.out_ids_file_path = self.out_dir / f"ids_{args.partition}elopment.txt"
+        elif args.partition == "train":
+            self.out_ids_file_path = self.out_dir / f"ids_{args.partition}ing.txt"
+
         self.out_annotation_file_path = self.out_dir / f"anns_{args.partition}{args.track}.txt" \
             if args.partition == "test" else self.out_dir / f"anns_train_dev{args.track}.txt"
 
@@ -666,7 +674,7 @@ class CodiespToClef2019:
             except KeyError:
                 self.doc_label_dict[doc_id] = label
 
-    def write_doc_ids_to_file(self):
+    def write_doc_ids_to_file(self, delimiter="\n"):
         try:
             self.out_dir.mkdir(parents=True, exist_ok=False)
             print(f"{self.out_dir} created! {self.out_ids_file_path.name} will be saved here.")
@@ -675,6 +683,8 @@ class CodiespToClef2019:
 
         if not self.out_ids_file_path.exists() or self.args.force_rerun:
             write_to_file(self._yield_doc_filename(), self.out_ids_file_path)
+        else:
+            print(f"{self.out_ids_file_path} already exists! Force re-run to overwrite!")
 
     def write_annotation_file(self, delimiter="|"):
         """
@@ -692,11 +702,23 @@ class CodiespToClef2019:
         except FileExistsError:
             print(f"{self.out_dir} already exists! {self.out_annotation_file_path.name} will be saved here.")
 
-        if not self.out_annotation_file_path.exists() or self.args.force_rerun:
-            with open(self.out_annotation_file_path, mode="w", encoding="utf-8") as out_file:
-                for doc_id, labels in self.doc_label_dict.items():
-                    doc_labels = delimiter.join(labels)
-                    out_file.write(f"{doc_id}\t{doc_labels}\n")
+        # test partition or re-running dev/train partitions, write over existing file
+        if self.args.partition == "test" or self.args.force_rerun:
+            if not self.out_annotation_file_path.exists() or self.args.force_rerun:
+                with open(self.out_annotation_file_path, mode="w", encoding="utf-8") as out_file:
+                    for doc_id, labels in self.doc_label_dict.items():
+                        doc_labels = delimiter.join(labels)
+                        out_file.write(f"{doc_id}\t{doc_labels}\n")
+            else:
+                print(f"{self.out_annotation_file_path} exists! Force re-run to overwrite!")
+        else:
+            # for train/dev partition, append to existing file as both partitions' annotations are in the same file
+            # file may contain duplicate entries if script is run multiple times
+            if not self.args.force_rerun:
+                with open(self.out_annotation_file_path, mode="a", encoding="utf-8") as out_file:
+                    for doc_id, labels in self.doc_label_dict.items():
+                        doc_labels = delimiter.join(labels)
+                        print(f"{doc_id}\t{doc_labels}", file=out_file)
 
     def copy_doc_files(self):
         """
@@ -726,25 +748,32 @@ def main():
     # testing parts of guttman preprocessing; use run_preprocesss.py for preprocessing
     args = cl_parser()
     args.data_dir = "codiesp"
-    args.partition = "test"
     print(args)
 
-    codi_clef = CodiespToClef2019(args)
-    codi_clef.write_doc_ids_to_file()
-    codi_clef.write_annotation_file()
-    codi_clef.copy_doc_files()
+    partitions = ["test", "dev", "train"]
+    tracks = ["D", "P", "X"]
 
-    args.track = "P"
-    codi_clef = CodiespToClef2019(args)
-    codi_clef.write_annotation_file()
+    # making id and annotation files for all partitions and all track
+    # copying Spanish doc files to for all partitions
+    for partition in partitions:
+        for track in tracks:
+            args.partition = partition
+            args.track = track
+            print(args)
+            codi_clef = CodiespToClef2019(args)
+            if track == "D":
+                codi_clef.write_doc_ids_to_file()
+                codi_clef.copy_doc_files()
+            codi_clef.write_annotation_file()
 
-    args.track = "X"
-    codi_clef = CodiespToClef2019(args)
-    codi_clef.write_annotation_file()
-
+    # copying English version doc files for all partitions
     args.lang = "en"
-    codi_clef = CodiespToClef2019(args)
-    codi_clef.copy_doc_files()
+    for partition in partitions:
+        args.partition = partition
+        codi_clef = CodiespToClef2019(args)
+        codi_clef.copy_doc_files()
+
+
 """
     args.data_dir = "guttman"
     args.partition = "all"
