@@ -90,7 +90,6 @@ def iterative_train_test_split(X, y, test_size, random_state=None, shuffle=None)
     return X_train, y_train, X_test, y_test
 
 
-
 def _fold_tie_break(desired_samples_per_fold, M, random_state):
     """Helper function to split a tie between folds with same desirability of a given sample
     Parameters
@@ -308,6 +307,7 @@ class IterativeStratification(_BaseKFold):
 
         for fold in folds:
             yield fold
+
 
 def main():
     # testing reproducibility
