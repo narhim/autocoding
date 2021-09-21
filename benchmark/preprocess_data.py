@@ -10,6 +10,7 @@ import json
 from sklearn.preprocessing import MultiLabelBinarizer
 from collections import Counter
 from pathlib import Path
+import shutil
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,11 +40,37 @@ def cl_parser(argv=None):
                         type=str,
                         default="test",
                         help="test | development | training -- should match naming style in dataset")
-    parser.add_argument("--binarize_labels", type=bool, default=True)
-    parser.add_argument("--output_dir", type=str, default="preprocessed")
-    parser.add_argument("--plot", type=bool, default=True)
-    parser.add_argument("--force_rerun", type=bool, default=False)
-    parser.add_argument("--random_state", type=int, default=35)
+    parser.add_argument("--binarize_labels",
+                        type=bool,
+                        default=True)
+    parser.add_argument("--output_dir",
+                        type=str,
+                        default="preprocessed")
+    parser.add_argument("--plot",
+                        type=bool,
+                        default=True)
+
+    # use the following args for Guttman pre-processing only
+    parser.add_argument("--force_rerun",
+                        type=bool,
+                        default=False)
+    parser.add_argument("--random_state",
+                        type=int,
+                        default=35)
+
+    # only applicable to CodiEsp
+    parser.add_argument("--subdir",
+                        type=str,
+                        default="final_dataset_v4_to_publish",
+                        help="subdir if any for the dataset; dir containing test/dev/train subdirectories")
+    parser.add_argument("--track",
+                        type=str,
+                        default="D",
+                        help="D (diagnostic) | P (procedure) | X (both)")
+    parser.add_argument("--lang",
+                        type=str,
+                        default="esp",
+                        help="choose language esp (spanish) | en (english")
 
     return parser.parse_args(argv)
 
@@ -73,10 +100,10 @@ def read_from_json(og_data, path):
 
 def write_to_file(list_of_lines, path, delimiter="\n"):
     """
-    Write list of str to file path, with specified delimiter
+    Write list or iterable of str to file path, with specified delimiter
 
     :param delimiter:
-    :param list_of_lines: list of str
+    :param list_of_lines: list/iterable of str
     :param path: out file path
     :return:
     """
@@ -87,6 +114,8 @@ def write_to_file(list_of_lines, path, delimiter="\n"):
 
 def lines_from_file(path):
     """
+    Yield line from file path with trailing whitespaces removed
+
     :param path: path to file
     :return: each line with trailing whitespaces removed
     """
@@ -588,11 +617,135 @@ class PreprocessGuttman(Preprocess):
                     doc_out_file.write(doc_text)
 
 
+class CodiespToClef2019:
+    """
+    Rewrite Codiesp corpus to Clef2019 format
+    """
+    def __init__(self, args=None):
+        # arguments and paths
+        self.args = args
+        self.data_root_dir = Path(__file__).resolve().parent / args.data_dir / args.subdir
+        self.data_dir = self.data_root_dir / args.partition
+        self.annotation_file_path = self.data_dir / f"{args.partition}{args.track}.tsv"
+        self.docs_dir = self.data_dir / "text_files" if args.lang == "esp" \
+            else self.data_dir / f"text_files_{args.lang}"
+
+        # output to clef2019 args and paths
+        self.out_root_dir = Path(__file__).resolve().parent / f"{args.data_dir}_clef"
+        self.out_dir = self.out_root_dir / args.partition if args.partition == "test" \
+            else self.out_root_dir / f"train_dev"
+        self.out_ids_file_path = self.out_dir / f"ids_{args.partition}.txt"
+        self.out_annotation_file_path = self.out_dir / f"anns_{args.partition}{args.track}.txt" \
+            if args.partition == "test" else self.out_dir / f"anns_train_dev{args.track}.txt"
+
+        if args.lang == "esp":
+            self.out_docs_dir = self.out_dir / f"docs" if args.partition == "test" else self.out_dir / f"docs-training"
+        else:
+            self.out_docs_dir = self.out_dir / f"docs_{args.lang}" if args.partition == "test" \
+                else self.out_dir / f"docs-training-{args.lang}"
+
+        # Codiesp specific data attributes
+        self.doc_label_dict = dict()
+
+    def _yield_doc_filename(self):
+        for filename in self.docs_dir.iterdir():
+            if filename.is_file():
+                yield filename.stem
+
+    def _extract_annotation(self):
+        """
+        Read in the annotation file into dict of {"doc_id": ["label1", "label2", "label3", "..."]}.
+        :return:
+        """
+        for doc_lab in lines_from_file(self.annotation_file_path):
+            doc_id, *label = doc_lab.split("\t")
+            if self.args.track == "X":
+                label = [label[1]]
+            try:
+                self.doc_label_dict[doc_id].extend(label)
+            except KeyError:
+                self.doc_label_dict[doc_id] = label
+
+    def write_doc_ids_to_file(self):
+        try:
+            self.out_dir.mkdir(parents=True, exist_ok=False)
+            print(f"{self.out_dir} created! {self.out_ids_file_path.name} will be saved here.")
+        except FileExistsError:
+            print(f"{self.out_dir} already exists! {self.out_ids_file_path.name} will be saved here.")
+
+        if not self.out_ids_file_path.exists() or self.args.force_rerun:
+            write_to_file(self._yield_doc_filename(), self.out_ids_file_path)
+
+    def write_annotation_file(self, delimiter="|"):
+        """
+        Re-write annotation file in clef2019 format
+
+        :param delimiter: type of delimiter symbol separating the list of labels; cleft2019 uses the pipe ('|') symbol
+        :return:
+        """
+        if not self.doc_label_dict:
+            self._extract_annotation()
+
+        try:
+            self.out_dir.mkdir(parents=True, exist_ok=False)
+            print(f"{self.out_dir} created! {self.out_annotation_file_path.name} will be saved here.")
+        except FileExistsError:
+            print(f"{self.out_dir} already exists! {self.out_annotation_file_path.name} will be saved here.")
+
+        if not self.out_annotation_file_path.exists() or self.args.force_rerun:
+            with open(self.out_annotation_file_path, mode="w", encoding="utf-8") as out_file:
+                for doc_id, labels in self.doc_label_dict.items():
+                    doc_labels = delimiter.join(labels)
+                    out_file.write(f"{doc_id}\t{doc_labels}\n")
+
+    def copy_doc_files(self):
+        """
+        Copy doc files to the Codiesp_clef2019 directory.
+        :return:
+        """
+
+        try:
+            self.out_docs_dir.mkdir(parents=True, exist_ok=False)
+            print(f"{self.out_docs_dir} created! Files will be copied here.")
+        except FileExistsError:
+            print(f"{self.out_docs_dir} already exists! Files will be saved here.")
+
+        for src_filepath in self.docs_dir.iterdir():
+            if src_filepath.is_file():
+                dest_filepath = self.out_docs_dir / src_filepath.name
+                if not dest_filepath.exists() or self.args.force_rerun:
+                    try:
+                        # for python 3.8+ this should be fine
+                        shutil.copy(src_filepath, dest_filepath)
+                    except TypeError:
+                        # for python <=3.7 shutil doesn't work with PosixPath
+                        shutil.copy(str(src_filepath), str(dest_filepath))
+
+
 def main():
     # testing parts of guttman preprocessing; use run_preprocesss.py for preprocessing
     args = cl_parser()
+    args.data_dir = "codiesp"
+    args.partition = "test"
     print(args)
 
+    codi_clef = CodiespToClef2019(args)
+    codi_clef.write_doc_ids_to_file()
+    codi_clef.write_annotation_file()
+    codi_clef.copy_doc_files()
+
+    args.track = "P"
+    codi_clef = CodiespToClef2019(args)
+    codi_clef.write_annotation_file()
+
+    args.track = "X"
+    codi_clef = CodiespToClef2019(args)
+    codi_clef.write_annotation_file()
+
+    args.lang = "en"
+    codi_clef = CodiespToClef2019(args)
+    codi_clef.copy_doc_files()
+"""
     args.data_dir = "guttman"
     args.partition = "all"
     print(args)
@@ -603,6 +756,7 @@ def main():
     guttmann_preprocess.write_partition_files(partition_name="test")
     guttmann_preprocess.write_partition_files(partition_name="training")
     guttmann_preprocess.write_partition_files(partition_name="development")
+"""
 
 
 if __name__ == '__main__':
