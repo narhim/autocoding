@@ -58,20 +58,23 @@ def cl_parser(argv=None):
                         type=int,
                         default=35)
 
-    # only applicable to CodiEsp
+    # only applicable to CodiEsp and/or Cantemist
     parser.add_argument("--subdir",
                         type=str,
-                        default="final_dataset_v4_to_publish",
+                        default="",
                         help="subdir if any for the dataset; dir containing test/dev/train subdirectories")
     parser.add_argument("--track",
                         type=str,
                         default="D",
-                        help="D (diagnostic) | P (procedure) | X (both)")
+                        help="Codiesp: D (diagnostic) | P (procedure) | X (both); Cantemist: coding | ner | norm")
     parser.add_argument("--lang",
                         type=str,
                         default="esp",
-                        help="choose language esp (spanish) | en (english")
-
+                        help="choose language esp (spanish) | en (english); use esp as default for Cantemist")
+    parser.add_argument("--version",
+                        type=str,
+                        default="",
+                        help="Cantemist dev partition 1 or 2; else an empty str")
     return parser.parse_args(argv)
 
 
@@ -98,16 +101,17 @@ def read_from_json(og_data, path):
     assert og_data == data
 
 
-def write_to_file(list_of_lines, path, delimiter="\n"):
+def write_to_file(list_of_lines, path, delimiter="\n", overwrite=True):
     """
     Write list or iterable of str to file path, with specified delimiter
 
-    :param delimiter:
+    :param overwrite: True for mode = w, False to append to existing path
+    :param delimiter: newline or other delimiter characters
     :param list_of_lines: list/iterable of str
     :param path: out file path
     :return:
     """
-    with open(path, mode="w", encoding="utf-8") as out_file:
+    with open(path, mode="w" if overwrite else "a", encoding="utf-8") as out_file:
         for line in list_of_lines:
             out_file.write(f"{line}{delimiter}")
 
@@ -676,7 +680,7 @@ class CodiespToClef2019:
             except KeyError:
                 self.doc_label_dict[doc_id] = label
 
-    def write_doc_ids_to_file(self, delimiter="\n"):
+    def write_doc_ids_to_file(self, delimiter="\n", append=False):
         try:
             self.out_dir.mkdir(parents=True, exist_ok=False)
             print(f"{self.out_dir} created! {self.out_ids_file_path.name} will be saved here.")
@@ -684,8 +688,13 @@ class CodiespToClef2019:
             print(f"{self.out_dir} already exists! {self.out_ids_file_path.name} will be saved here.")
 
         if not self.out_ids_file_path.exists() or self.args.force_rerun:
-            write_to_file(self._yield_doc_filename(), self.out_ids_file_path)
+            write_to_file(self._yield_doc_filename(), self.out_ids_file_path, delimiter=delimiter,
+                          overwrite=self.args.force_rerun)
+        elif self.out_ids_file_path.exists() and append:
+            # in case file exists and append to it
+            write_to_file(self._yield_doc_filename(), self.out_ids_file_path, delimiter=delimiter, overwrite=False)
         else:
+            # otherwise
             print(f"{self.out_ids_file_path} already exists! Force re-run to overwrite!")
 
     def write_annotation_file(self, delimiter="|"):
@@ -735,7 +744,7 @@ class CodiespToClef2019:
             print(f"{self.out_docs_dir} already exists! Files will be saved here.")
 
         for src_filepath in self.docs_dir.iterdir():
-            if src_filepath.is_file():
+            if src_filepath.is_file() and src_filepath.name.endswith("txt"):
                 dest_filepath = self.out_docs_dir / src_filepath.name
                 if not dest_filepath.exists() or self.args.force_rerun:
                     try:
@@ -761,10 +770,102 @@ class PreprocessCodiesp(Preprocess):
                            self.args.lang / self.args.track
 
 
+class CantemistToClef2019(CodiespToClef2019):
+    def __init__(self, args):
+        super(CantemistToClef2019, self).__init__(args)
+        # overriding CodiespToClef2019 attributes
+        # args.version 1 is for dev1, 2 is for dev2 otherwise args.version == None
+        # args.track == coding | ner | norm
+        self.data_dir = self.data_root_dir / f"{args.partition}-set{args.version}"
+        self.annotation_dir = self.data_dir / f"{args.data_dir}-{args.track}"
+        if args.partition != "test":
+            self.docs_dir = self.data_dir / f"{args.data_dir}-{args.track}" / "txt" if args.track == "coding" \
+                else self.data_dir / f"{args.data_dir}-{args.track}"
+        else:
+            # the test partition is missing the "txt" folder, but .txt files in all tracks are identical
+            self.docs_dir = self.data_dir / f"{args.data_dir}-norm"
+
+        if args.track != "coding":
+            self.annotation_file_path = self.annotation_dir
+        else:
+            self.annotation_file_path = self.annotation_dir / f"{args.partition}{args.version}-{args.track}.tsv"
+
+    def _yield_doc_filename(self):
+        for filename in self.docs_dir.iterdir():
+            if filename.is_file() and filename.name.endswith("txt"):
+                yield filename.stem
+
+    def _extract_annotation(self):
+        """
+        Read in the annotation file into dict of {"doc_id": ["label1", "label2", "label3", "..."]}.
+        :return:
+        """
+        if self.args.track == "coding":
+            for doc_lab in lines_from_file(self.annotation_file_path):
+                doc_id, *label = doc_lab.split("\t")
+                if doc_id == "file" or "code" in label:
+                    # skip first line; in Cantemist {partition}-coding.tsv file is the heading "file"\t"code"
+                    continue
+                try:
+                    self.doc_label_dict[doc_id].extend(label)
+                except KeyError:
+                    self.doc_label_dict[doc_id] = label
+        else:
+            assert self.annotation_dir.exists(), f"{self.annotation_dir} does not exists!!"
+            for ann_file in self.annotation_dir.iterdir():
+                if ann_file.is_file() and ann_file.name.endswith("ann"):
+                    doc_id = ann_file.stem
+                    labels_list = []
+                    for ann_line in lines_from_file(ann_file):
+                        if self.args.track == "norm" and not ann_line.startswith("#"):
+                            continue
+                        # read every line in "ner" track and ONLY line that starts with # in "norm"
+                        # in both tracks, label is the last column in tab separated line
+                        label = ann_line.split("\t")[-1]
+                        labels_list.append(label)
+
+                    try:
+                        self.doc_label_dict[doc_id].extend(labels_list)
+                    except KeyError:
+                        self.doc_label_dict[doc_id] = labels_list
+
+
 def main():
     args = cl_parser()
-    args.data_dir = "codiesp"
-    print(args)
+    # test cantemist reformatting
+    args.data_dir = "cantemist"
+    partitions = ["test", "train", "dev"]
+    tracks = ["coding", "ner", "norm"]
+
+    for partition in partitions:
+        if partition == "dev":
+            args.version = "1"
+        for track in tracks:
+            args.partition = partition
+            args.track = track
+            print(args)
+            cantemist_clef = CantemistToClef2019(args)
+            if track == "norm":
+                if partition == "dev":
+                    cantemist_clef.write_doc_ids_to_file(append=True)
+                else:
+                    cantemist_clef.write_doc_ids_to_file()
+                cantemist_clef.copy_doc_files()
+            cantemist_clef.write_annotation_file()
+
+    args.version = "2"
+    assert args.partition == "dev", f"{args.partition} does not have version 1 or 2!!"
+    for track in tracks:
+        args.track = track
+        print(args)
+        cantemist_clef = CantemistToClef2019(args)
+        if track == "norm":
+            if args.partition == "dev":
+                cantemist_clef.write_doc_ids_to_file(append=True)
+            else:
+                cantemist_clef.write_doc_ids_to_file()
+            cantemist_clef.copy_doc_files()
+        cantemist_clef.write_annotation_file()
 
 
 """
