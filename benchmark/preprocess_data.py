@@ -74,7 +74,7 @@ def cl_parser(argv=None):
     parser.add_argument("--version",
                         type=str,
                         default="",
-                        help="Cantemist dev partition 1 or 2; else an empty str")
+                        help="Cantemist dev partition 1 or 2 for reformatting to clef2019; else an empty str")
     return parser.parse_args(argv)
 
 
@@ -832,6 +832,7 @@ class CantemistToClef2019(CodiespToClef2019):
 
 def main():
     args = cl_parser()
+"""
     # test cantemist reformatting
     args.data_dir = "cantemist"
     partitions = ["test", "train", "dev"]
@@ -866,7 +867,7 @@ def main():
                 cantemist_clef.write_doc_ids_to_file()
             cantemist_clef.copy_doc_files()
         cantemist_clef.write_annotation_file()
-
+"""
 
 """
     # testing codiesp reformatting
