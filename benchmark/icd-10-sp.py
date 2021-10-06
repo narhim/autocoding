@@ -202,10 +202,13 @@ class SpaICD10_Diag_Hierarchy():
 	def add_level(self,G,l1,l2):
 		'''Method to add hierarchy levels from level_2 to level_5.'''
 		G.add_nodes_from(l2)
-		for (level_1,d) in l1:
-			for (level_2,description) in l2:
-				if re.match(level_1,level_2):
-					G.add_edge(level_1,level_2)
+		#for (level_1,d) in l1:
+		#	for (level_2,description) in l2:
+		#		if re.match(level_1,level_2):
+		#			G.add_edge(level_1,level_2)
+
+		for (level_2,description) in l2:
+			G.add_edge(level_2[:-1],level_2)
 		return G
 
 	def del_child_add_child(self,G,children,description,beg,end,section,subsection):
@@ -386,6 +389,149 @@ class SpaICD10_Diag_Hierarchy():
 		G = self.add_level(G,level_4_codes,level_5_codes)
 		return G
 
+class SpaICD10_Prc_Hierarchy():
+	def __init__(self):
+
+		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_PROCEDIMIENTOS_CIE10ES_%20NUEVOS_BORRADOS_EDITADOS%20Y%20COMPLETA_20170921_632774861361197060.xlsx"
+
+		
+		file, response = urllib.request.urlretrieve(url)
+		xls = pd.ExcelFile(file)
+		df1 = pd.read_excel(xls, 'completa',encoding="utf-8")
+		df2 = df1.groupby("codigo")
+		self.codes_descriptors = {r["codigo"] : {"description": r["descripcion"]} for i,r in df1.iterrows()}
+		#self.codes_descriptors = [(r["codigo"],{"full description": r["descripcion"]}) for i,r in df1.iterrows()]
+
+	def stratify_codes(self,dictionary):
+
+		nodes = dictionary.keys()
+
+		chapters = [("0",{"description":"Médico-Quirúrgica"}),("1",{"description":"Obstetricia"}),("2",{"description":"Colocación"}),("3",{"description":"Administración"}),("4",{"description":"Medición y Monitorización"}),
+		("5",{"description":"Asistencia y Soporte Extracorpóreos"}),("6",{"description":"Terapias Extracorpóreas"}),("7",{"description":"Osteopatía"}),("8",{"description":"Otros Procedimientos"}),("9",{"description":"Quiropráctica"}),
+		("B",{"description":"Imagen"}),("C",{"description":"Medicina Nuclear"}),("D",{"description":"Radioterapia"}),("F",{"description":"Rehabilitación Física y Audiología Diagnóstica"}),("G",{"description":"Salud Mental"}),("H",{"description":"Tratamiento de Abuso de Sustancias"}),("X",{"description":"Nueva Tecnología"})]
+		
+		subsect_desc_1 = {"A":{"description": "Sistemas Fisiológicos"},"B":{"description": "Sistema Respiratorio"},"C":{"description": "Dispositivo Permanente"},"D":{"description": "Sistema Gastrointestinal"},"E":{"description": "Sistemas Fisiológicos y Regiones Anatómicas"},
+						"F":{"description": "Sistema Hepatobiliar y Páncreas"},"G":{"description": "Sistema Endocrino"},"H":{"description": "Piel y Mama"},"J":{"description": "Tejido Subcutáneo y Fascia"},"K":{"description": "Músculos"},"L":{"description": "Tendones"},"M":{"description": "Bursas y Ligamentos"},
+						"N":{"description": "Huesos Cráneo y Cara"},"P":{"description": "Huesos Superiores"},"Q":{"description": "Huesos Inferiores"},"R":{"description": "Articulaciones Superiores"}, "S":{"description": "Articulaciones Inferiores"},
+						"T":{"description": "Sistema Urinario"},"U":{"description": "Sistema Reproductor Femenino"},"V":{"description": "Sistema Reproductor Masculino"},"W":{"description": "Regiones anatómicas"},"X":{"description": "Regiones Anatómicas, Extremidades Superiores"},
+						"Y":{"description": "Regiones Anatómicas, Extremidades Inferiores"},"Z":{"description": "Ninguno(-a)"},
+						"0":{"description": "Sistema Nervioso Central"},"1":{"description": "Sistema Nervioso Periférico"},"2":{"description": "Corazón y Grandes Vasos"},"3":{"description": "Arterias Superiores"},"4":{"description": "Arterias Inferiores"},
+						"5":{"description": "Venas Superiores"},"6":{"description": "Venas Inferiores"},"7":{"description": "Sistemas Linfático y Hermático"},"8":{"description": "Ojo"},"9":{"description": "Oído, Nariz,Senos Paranasales"}
+						}
+
+		subsect_desc_2 = {"30":{"description": "Circulatorio"},"10": {"description": "Embarazo"},"0W":{"description":"Regiones Anatómicas Generales"},"0C":{"description":"Boca y Garganta"},"B2":{"description":"Corazón"},"C2":{"description":"Corazón"},
+						"2Y":{"description":"Orificios Anatómicos"},"B5":{"description": "Venas"},"C5":{"description": "Venas"},"B7":{"description": "Sistema Linfático"},"C7":{"description": "Sistema Linfático"},"D7":{"description": "Sistema Linfático"},"B9":{"description": "Oído, Nariz, Boca y Garganta"},
+						"C9":{"description": "Oído, Nariz, Boca y Garganta"},"D9":{"description": "Oído, Nariz, Boca y Garganta"},"BH":{"description": "Piel, Tejido Subcutáneo y Mama"},
+						"CH":{"description": "Piel, Tejido Subcutáneo y Mama"},"BL":{"description": "Tejido Comectivo"},"BP":{"description": "Huesos Superiores no Axiales"},"BQ":{"description": "Huesos Inferiores no Axiales"},"BR": {"description": "Esqueleto Axial, Excepto Huesos Craneales y Faciales"},
+						"BY":{"description": "Feto y Obstetricia"},"CP":{"description": "Sistema Músculo Esquelético"},"DP":{"description": "Sistema Músculo Esquelético"},"D0":{"description": "Sistema Nervioso Central y Periférico"},"DH":{"description": "Piel"},"DM":{"description": "Mama"},"F0":{"description": "Rehabilitación"},
+						"F1":{"description": "Audiología Diagnóstica"},"X2":{"description": "Sistema Cardiovascular"},"XH":{"description": "Piel, Tejido Subcutáneo, Fascia y Mama"},"XN":{"description": "Huesos"},"XR":{"description": "Articulaciones"}
+						}
+		double_subsect = list(subsect_desc_2.keys())
+
+		subsections = []
+		level_1_codes = set()
+		level_2_codes = set()
+		level_3_codes = set()
+		level_4_codes = set()
+		level_5_codes = []
+
+
+		
+		for node in nodes:
+			level_1_codes.add(node[0:3])
+			level_2_codes.add(node[0:4])
+			level_3_codes.add(node[0:5])
+			level_4_codes.add(node[0:6])
+			level_5_codes.append((node[:],dictionary[node]))
+			if node[0:2] in double_subsect:
+				subsections.append((node[0:2],subsect_desc_2[node[0:2]]))
+			else:
+				subsections.append((node[0:2],subsect_desc_1[node[1]]))
+			
+
+
+		level_1_codes = sorted(level_1_codes)
+		level_2_codes = sorted(level_2_codes)
+		level_3_codes = sorted(level_3_codes)
+		level_4_codes = sorted(level_4_codes)
+		
+		return chapters,subsections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes
+	
+	def build_graph(self):
+		''' Method that builds the hierarchy tree given the dictionary of codes with their description.'''
+		chapters,subsections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes = self.stratify_codes(self.codes_descriptors)
+
+		dict_sect = {"0": [
+							("001-00X",{"description":"Sistema Nervioso Central"}),("012-01X",{"description":"Sistema Nervioso Periférico"}),("021-02Y",{"description":"Corazón y Grandes Vasos"}),("031-03W",{"description":"Arterias Superiores"}),("041-04W",{"description":"Arterias Inferiores"}),
+							("051-05W",{"description":"Venas Superiores"}),("061-06W",{"description":"Venas Inferiores"}),("072-07Y",{"description":"Sistemas Linfático y Hemático"}),("080-08X",{"description":"Ojo"}),("090-09W",{"description":"Oído, Nariz, Senos Paranasales"}),
+							("0B1-0BY",{"description":"Sistema Respiratorio"}),("0C0-0CX",{"description":"Boca y Garganta"}),("0D1-0DY",{"description":"Sistema Gastrointestinal"}),("0F1-0FY",{"description":"Sistema Hepatobiliar y Páncreas"}),("0G2-0GW",{"description":"Sistema Endocrino"}),
+							("0H0-0HX",{"description":"Piel y Mama"}),("0J0-0JX",{"description":"Tejido Subcutáneo y Fascia"}),("0K2-0KX",{"description":"Músculos"}),("0L2-0LX",{"description":"Tendones"}),("0M2-0MX",{"description":"Bursas y Ligamentos"}),("0N2-0NW",{"description":"Huesos Cráneo y Cara"}),
+							("0P2-0PW",{"description":"Huesos Superiores"}),("0Q2-0QW",{"description":"Huesos Inferiores"}),("0R2-0RW",{"description":"Articulaciones Superiores"}),("0S2-0SW",{"description":"Articulaciones Inferiores"}),("0T1-0TY",{"description":"Sistema Urinario"}),
+							("0U1-0UY",{"description":"Sistema Reproductor Femenino"}),("0V1-0VW",{"description":"Sistema Reproductor Masculino"}),("0W0-0WW",{"description":"Regiones Anatómicas Generales"}),("0X0-0XX",{"description":"Regiones Anatómicas, Extremidades Superiores"}),
+							("0Y0-0YW",{"description":"Regiones Anatómicas, Extremidades Inferiores"})
+						],
+					"1": [("102-10Y",{"description":"Sección Obstetricia"})],
+					"2": [("2W0-2Y5",{"description":"Sección Colocación"})],
+					"3":[("302-3E1",{"description":"Sección Administración"})],
+					"4":[("4A0-4B0",{"description":"Sección Medición y Monitorización"})],
+					"5": [("5A0-5A2",{"description": "Sección Asistencia y Soporte Extracorpóreos"})],
+					"6":[("6A0-6A9",{"description":"Sección Terapias Extracorpóreas "})],
+					"7":[("7W0-7W0",{"description":"Sección Osteopático"})],
+					"8":[("8C0-8E0",{"description":"Sección Otros Procedimientos"})],
+					"9":[("9WB-9WB",{"description":"Sección Quiropráctica"})],
+					"B":[("B00-BY4",{"description":"Sección Imagen"})],
+					"C":[("C01-CW7",{"description":"Sección Medicina Nuclear"})],
+					"D":[("D00-DWY",{"description":"Sección Radioterapia"})],
+					"F":[("F00-F15",{"description":"Sección Rehabilitación Física y Audiología Diagnóstica"})],
+					"G":[("GZ1-GZJ",{"description": "Sección Salud Mental"})],
+					"H":[("HZ2-HZ9",{"description":"Sección Tratamiento de Abuso de Sustancias"})],
+					"X":[("X2A-XW0",{"description":"Sección Nueva Tecnología"})],
+					}
+		G  = nx.DiGraph()
+		root_name = "root"
+		G.add_node(root_name)
+		G.add_nodes_from(chapters)
+		G.add_nodes_from(subsections)
+		G.add_nodes_from(level_1_codes)
+		G.add_nodes_from(level_2_codes)
+
+		for (chapter,description) in chapters:
+			G.add_edge(root_name,chapter)
+
+		list_sections = []
+		for chapter,sections in dict_sect.items():
+			G.add_nodes_from(sections)
+			for (section,description) in sections:
+				G.add_edge(chapter,section)
+				list_sections.append(section)
+			
+		for (subsection,description) in subsections:
+			for section in list_sections:
+				if (section[0]=="0") and (subsection[0]=="0"):
+					if section[0:2] == subsection[0:2]:
+						G.add_edge(section,subsection)
+				elif (section[0]==subsection[0]):
+					G.add_edge(section,subsection)
+
+		for level in level_1_codes:
+		#	G.add_node(level)
+			G.add_edge(level[0:-1],level)
+
+		for level in level_2_codes:
+			G.add_edge(level[0:-1],level)
+
+		G.add_nodes_from(level_3_codes)
+		for level in level_3_codes:
+			G.add_edge(level[0:-1],level)
+#
+		G.add_nodes_from(level_4_codes)
+		for level in level_4_codes:
+			G.add_edge(level[0:-1],level)
+		G.add_nodes_from(level_5_codes)
+		for (level,description) in level_5_codes:
+			G.add_edge(level[0:-1],level)
+
+		return G
 
 def write_output(G,f_name):
 	''' Function that writes the resulting graph both in a json and a pickle file. '''
@@ -404,18 +550,18 @@ def write_output(G,f_name):
 def main():
 
 	#Generate ICD-O (or CIE-O) hierarchy
-	#icd_o_spa = SpaICD_O_Hierarchy()
-	#G1_icd_o_spa = icd_o_spa.build_graph()
-	#write_output(G1_icd_o_spa,"icd-o-sp")
+	icd_o_spa = SpaICD_O_Hierarchy()
+	G1_icd_o_spa = icd_o_spa.build_graph()
+	write_output(G1_icd_o_spa,"icd-o-sp")
 
 	#Generate ICD-Diag (or CIE-Diag) hierarchy
-	#icd_diag_spa = SpaICD10_Diag_Hierarchy()
-	#G1_icd_diag_spa = icd_diag_spa.build_graph()
-	#write_output(G1_icd_diag_spa,"icd-diag-sp")
+	icd_diag_spa = SpaICD10_Diag_Hierarchy()
+	G1_icd_diag_spa = icd_diag_spa.build_graph()
+	write_output(G1_icd_diag_spa,"icd-diag-sp")
 
-	icd_proc_spa = SpaICD10_proc_Hierarchy()
-	#G1_icd_proc_spa = icd_proc_spa.build_graph()
-	#write_output(G1_icd_proc_spa,"icd-proc-sp")
+	icd_proc_spa = SpaICD10_Prc_Hierarchy()
+	G1_icd_proc_spa = icd_proc_spa.build_graph()
+	write_output(G1_icd_proc_spa,"icd-proc-sp")
 	
 if __name__ == '__main__':
 	main()
