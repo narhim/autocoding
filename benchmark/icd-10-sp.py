@@ -51,7 +51,7 @@ class SpaICD_O_Hierarchy():
 			co = c.group()
 			co = co.strip("/")
 			if co not in level_1_codes:
-				level_1_codes.append(co) #Level 1 doesn't explicitly exist in the excel file (thus no description), but it was decided to generate since it's  real level.
+				level_1_codes.append((co,{"full description": "no hay descripción", "short description": "ND"})) #Level 1 doesn't explicitly exist in the excel file (thus no description), but it was decided to generate since it's  real level.
 	
 		return level_1_codes,level_2_codes,level_3_codes
 
@@ -113,32 +113,39 @@ class SpaICD_O_Hierarchy():
 				list_subchapters.append(children)
 			else:
 				list_subchapters.append(chapter)
-		#G.add_nodes_from(level_1_codes)
-		for code in level_1_codes:
+		for (code,description) in level_1_codes:
 			parent = code[:-1]
 			for subchaps in list_subchapters: #First lookup for subchpters children
 				if type(subchaps) == list:
 					if parent in subchaps:
 						node = subchaps[0] + "-" + subchaps[-1]
 						G.add_node(code)
+						attrs = {code:description}
+						nx.set_node_attributes(G,attrs)
 						G.add_edge(node,code)
 				else:
 					if parent == subchaps:
 						G.add_node(code)
+						attrs = {code:description}
+						nx.set_node_attributes(G,attrs)
 						G.add_edge(subchaps,code)
 			for chaps in list_chapters: 
 				if type(chaps) == list:
 					if (parent in chaps) and (code not in list(G.nodes())):
 						node = chaps[0] + "-" + chaps[-1]
 						G.add_node(code)
+						attrs = {code:description}
+						nx.set_node_attributes(G,attrs)
 						G.add_edge(node,code)
 				else:
 					if (parent == chaps) and (code not in list(G.nodes())):
 						G.add_node(code)
+						attrs = {code:description}
+						nx.set_node_attributes(G,attrs)
 						G.add_edge(chaps,code)
 
 		G.add_nodes_from(level_2_codes)
-		for code in level_1_codes:
+		for (code,description) in level_1_codes:
 			for c in level_2_codes:
 				if re.match(code,c[0]):
 					G.add_edge(code,c[0])
@@ -165,8 +172,7 @@ class SpaICD10_Diag_Hierarchy():
 		
 		#Regex to match the different levels of codes.
 		chap_reg = re.compile("Cap.") #Cap.01
-		#sec_reg = re.compile("([A-Z][0-9]{2}-[A-Z])(([0-9]{2})|[0-9][A-Z])$") #A00-A09 Sections and subsections have the same format, they will separated letter
-		sec_reg = re.compile("([A-Z][0-9])(([0-9])|([A-Z]))-([A-Z][0-9])(([0-9])|([A-Z]))$")
+		sec_reg = re.compile("([A-Z][0-9])(([0-9])|([A-Z]))-([A-Z][0-9])(([0-9])|([A-Z]))$") #A00-A09 Sections and subsections have the same format, they will separated letter
 		#Lists to store the codes of the different levels. Examples of patterns are provided.
 		chapters = [] #Cap.01
 		sections = [] #A00-A09
@@ -177,7 +183,7 @@ class SpaICD10_Diag_Hierarchy():
 		level_5_codes = [] #A00.00AB, A00.000A, T53.0X1A, V84.5XXA, V99.XXXA, T80.A9XA, R40.2344, R40.A21A
 		
 		#Stratify the codes
-		for n,node in enumerate(nodes):
+		for node in nodes:
 			if re.search(chap_reg,node):
 				chapters.append((node,dictionary[node]))
 			elif re.search(sec_reg,node):
@@ -195,18 +201,13 @@ class SpaICD10_Diag_Hierarchy():
 			#else:	#Safety check to avoid leaving codes out.
 			#	print(node)
 
-		level_2_codes.remove(("Tab.D",dictionary["Tab.D"]))
+		level_2_codes.remove(("Tab.D",dictionary["Tab.D"])) #Useless and problematic, so remove it.
 
 		return chapters,sections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes
 	
 	def add_level(self,G,l1,l2):
 		'''Method to add hierarchy levels from level_2 to level_5.'''
 		G.add_nodes_from(l2)
-		#for (level_1,d) in l1:
-		#	for (level_2,description) in l2:
-		#		if re.match(level_1,level_2):
-		#			G.add_edge(level_1,level_2)
-
 		for (level_2,description) in l2:
 			G.add_edge(level_2[:-1],level_2)
 		return G
@@ -429,36 +430,36 @@ class SpaICD10_Prc_Hierarchy():
 		double_subsect = list(subsect_desc_2.keys())
 
 		subsections = []
-		level_1_codes = set()
-		level_2_codes = set()
-		level_3_codes = set()
-		level_4_codes = set()
+		level_1_codes = []
+		level_2_codes = []
+		level_3_codes = []
+		level_4_codes = []
 		level_5_codes = []
 
 
 		
 		for node in nodes:
-			level_1_codes.add(node[0:3])
-			level_2_codes.add(node[0:4])
-			level_3_codes.add(node[0:5])
-			level_4_codes.add(node[0:6])
+			level_1_codes.append((node[0:3],{"description": "no hay descripción"}))
+			level_2_codes.append((node[0:4],{"description": "no hay descripción"}))
+			level_3_codes.append((node[0:5],{"description": "no hay descripción"}))
+			level_4_codes.append((node[0:6],{"description": "no hay descripción"}))
 			level_5_codes.append((node[:],dictionary[node]))
 			if node[0:2] in double_subsect:
 				subsections.append((node[0:2],subsect_desc_2[node[0:2]]))
 			else:
 				subsections.append((node[0:2],subsect_desc_1[node[1]]))
-			
-
-
-		level_1_codes = sorted(level_1_codes)
-		level_2_codes = sorted(level_2_codes)
-		level_3_codes = sorted(level_3_codes)
-		level_4_codes = sorted(level_4_codes)
 		
 		return chapters,subsections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes
 	
 	def build_graph(self):
 		''' Method that builds the hierarchy tree given the dictionary of codes with their description.'''
+		def add_level(G,list_codes_descriptions):
+			G.add_nodes_from(list_codes_descriptions)
+			for (level,description) in list_codes_descriptions:
+				G.add_edge(level[0:-1],level)
+			return G
+
+
 		chapters,subsections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes = self.stratify_codes(self.codes_descriptors)
 
 		dict_sect = {"0": [
@@ -487,14 +488,13 @@ class SpaICD10_Prc_Hierarchy():
 					"H":[("HZ2-HZ9",{"description":"Sección Tratamiento de Abuso de Sustancias"})],
 					"X":[("X2A-XW0",{"description":"Sección Nueva Tecnología"})],
 					}
+
 		G  = nx.DiGraph()
 		root_name = "root"
 		G.add_node(root_name)
 		G.add_nodes_from(chapters)
 		G.add_nodes_from(subsections)
-		G.add_nodes_from(level_1_codes)
-		G.add_nodes_from(level_2_codes)
-
+		
 		for (chapter,description) in chapters:
 			G.add_edge(root_name,chapter)
 
@@ -513,23 +513,11 @@ class SpaICD10_Prc_Hierarchy():
 				elif (section[0]==subsection[0]):
 					G.add_edge(section,subsection)
 
-		for level in level_1_codes:
-		#	G.add_node(level)
-			G.add_edge(level[0:-1],level)
-
-		for level in level_2_codes:
-			G.add_edge(level[0:-1],level)
-
-		G.add_nodes_from(level_3_codes)
-		for level in level_3_codes:
-			G.add_edge(level[0:-1],level)
-#
-		G.add_nodes_from(level_4_codes)
-		for level in level_4_codes:
-			G.add_edge(level[0:-1],level)
-		G.add_nodes_from(level_5_codes)
-		for (level,description) in level_5_codes:
-			G.add_edge(level[0:-1],level)
+		G = add_level(G,level_1_codes)
+		G = add_level(G,level_2_codes)
+		G = add_level(G,level_3_codes)
+		G = add_level(G,level_4_codes)
+		G = add_level(G,level_5_codes)
 
 		return G
 
@@ -549,16 +537,17 @@ def write_output(G,f_name):
 
 def main():
 
-	#Generate ICD-O (or CIE-O) hierarchy
+	#Generate ICD-O and save (or CIE-O) hierarchy
 	icd_o_spa = SpaICD_O_Hierarchy()
 	G1_icd_o_spa = icd_o_spa.build_graph()
 	write_output(G1_icd_o_spa,"icd-o-sp")
 
-	#Generate ICD-Diag (or CIE-Diag) hierarchy
+	#Generate ICD-Diag and save (or CIE-Diag) hierarchy
 	icd_diag_spa = SpaICD10_Diag_Hierarchy()
 	G1_icd_diag_spa = icd_diag_spa.build_graph()
 	write_output(G1_icd_diag_spa,"icd-diag-sp")
 
+	#Generate and save ICD-Proc (or CIE-Proc) hierarchy
 	icd_proc_spa = SpaICD10_Prc_Hierarchy()
 	G1_icd_proc_spa = icd_proc_spa.build_graph()
 	write_output(G1_icd_proc_spa,"icd-proc-sp")
