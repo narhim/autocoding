@@ -26,7 +26,7 @@ class SpaICD_O_Hierarchy():
 		file, response = urllib.request.urlretrieve(url)
 		xls = pd.ExcelFile(file)
 		df1 = pd.read_excel(xls, 'Morfología con 7º caracter',encoding="utf-8")
-		self.codes_descriptors_7 = {r["codigo"] : {"full description": r["Descriptor Completo"], "short description":r["Descriptor Abreviado"]} for i,r in df1.iterrows()}
+		self.codes_descriptors_7 = {r["codigo"] : {"full description": r["Descriptor Completo"], "short description":r["Descriptor Abreviado"]} for i,r in df1.iterrows()} #Store all codes and their descriptions.
 		
 		
 	def stratify_codes(self,dictionary):
@@ -58,6 +58,7 @@ class SpaICD_O_Hierarchy():
 	def build_graph(self):
 		''' Method that builds the hierarchy tree given the dictionary of codes with their description.'''
 
+		#Stratify codes
 		level_1_codes,level_2_codes,level_3_codes = self.stratify_codes(self.codes_descriptors_7) #First stratify the codes
 
 		#Chapters and subchapters are not in the file used, so they are hard-coded here and separated into 2 for readibility (source: https://eciemaps.mscbs.gob.es/ecieMaps/documentation/documentation.html#)
@@ -159,12 +160,11 @@ class SpaICD_O_Hierarchy():
 
 class SpaICD10_Diag_Hierarchy():
 	def __init__(self):
-
 		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_DIAGNOSTICOS_CIE10ES_REFERENCIA%20Y%20VALIDACION_20171211_7449731228183628205.xlsx"
 		file, response = urllib.request.urlretrieve(url)
 		xls = pd.ExcelFile(file)
 		df1 = pd.read_excel(xls, 'finales y no finales',encoding="utf-8")
-		self.codes_descriptors = {r["codigo"] : {"description": r["descripcion"]} for i,r in df1.iterrows()}
+		self.codes_descriptors = {r["codigo"] : {"description": r["descripcion"]} for i,r in df1.iterrows()} #Store codes and descriptions in dictionary.
 	
 	def stratify_codes(self,dictionary):
 		''' Method to stratify the dictionary of codes based on their patters. Returns lists for each level with code and descriptions.'''
@@ -205,7 +205,7 @@ class SpaICD10_Diag_Hierarchy():
 
 		return chapters,sections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes
 	
-	def add_level(self,G,l1,l2):
+	def add_level(self,G,l2):
 		'''Method to add hierarchy levels from level_2 to level_5.'''
 		G.add_nodes_from(l2)
 		for (level_2,description) in l2:
@@ -213,6 +213,7 @@ class SpaICD10_Diag_Hierarchy():
 		return G
 
 	def del_child_add_child(self,G,children,description,beg,end,section,subsection):
+		'''Method to delete descendants and dd direct children.'''
 		start = children.index(beg)
 		finish = children.index(end) + 1
 		del children[start:finish]
@@ -224,16 +225,22 @@ class SpaICD10_Diag_Hierarchy():
 		return children,G
 
 	def build_graph(self):
-		''' Method that builds the hierarchy tree given the dictionary of codes with their description.'''
+		''' Method that builds the hierarchy tree given the dictionary of codes with their descriptions.'''
+		#Stratify dictionary of codes.
 		chapters,sections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes = self.stratify_codes(self.codes_descriptors)
+
+		#Initialize graph
 		G  = nx.DiGraph()
 		root_name = "root"
 		G.add_node(root_name)
+
 		#Add chapters
 		G.add_nodes_from(chapters)
 		for (chapter,description) in chapters:
 			G.add_edge(root_name,chapter)
+
 		#STRATIFY SECTIONS INTO SECTIONS, SUBSECTIONS AND SUBSUBSECTIONS.
+		#Since sections are ranges with hyphens, first learn which codes from level1 (single codes) (A00) are descendants of each chapter. Store it in codes_chap.
 		codes_chap = {}
 		for (chapter,description) in chapters:
 			descr_value = list(description.values())[0]
@@ -248,7 +255,6 @@ class SpaICD10_Diag_Hierarchy():
 					children.append(level)
 				elif beg[0] == end[0]:
 					if beg[0] == level[0]:
-
 						try:
 							if (int(beg[1:]) < int(level[1:])) and (int(end[1:]) > int(level[1:])):
 								children.append(level)
@@ -274,6 +280,7 @@ class SpaICD10_Diag_Hierarchy():
 						children.append(level)
 			codes_chap[chapter] = children
 
+		#Learn which sections are direct children of eeach chapter, bsed on the single codes. Store it in sections_chap dict.
 		sections_chap = {}
 		lista = list(codes_chap.items())
 
@@ -282,29 +289,29 @@ class SpaICD10_Diag_Hierarchy():
 				limits = section.split("-")
 				beg = limits[0]
 				end = limits[1]
-				if (chapter == "Cap.20") and (beg=="Y20") and (end=="Y33"):
+				if (chapter == "Cap.20") and (beg=="Y20") and (end=="Y33"): #quick fix for error in source.
 					children,G = self.del_child_add_child(G,children,description,"Y21",end,chapter,section)
 				elif (beg in children) and (end in children):
 					children,G = self.del_child_add_child(G,children,description,beg,end,chapter,section)
 			sections_chap[chapter] = children
-		subsections = [(section,description) for (section,description) in sections if section not in list(G.nodes())]
-		sections = [(section,description) for (section,description) in sections if section in list(G.nodes())]
+
+		subsections = [(section,description) for (section,description) in sections if section not in list(G.nodes())] #Now we have our candidates for subsections
+		sections = [(section,description) for (section,description) in sections if section in list(G.nodes())] #Now we now for sure which are the sections.
+
+		#Same process as for chapters, now for sections. Store single codes descendants in dict subsec_sec.
 		subsec_sec = {}
 		for (section,description) in sections:
-
 			limits = section.split("-")
 			beg = limits[0]
 			end = limits[1]
 			children = []
 			for level in level_1_codes.keys():
-				
 				if re.match(beg,level): #A00
 					children.append(level)
 				elif re.match(end,level): #B99
 					children.append(level)
 				elif beg[0] == end[0]:
 					if beg[0] == level[0]:
-						
 						try:
 							if (int(beg[1:]) < int(level[1:])) and (int(end[1:]) > int(level[1:])):
 								children.append(level)
@@ -333,10 +340,9 @@ class SpaICD10_Diag_Hierarchy():
 					elif (beg[0]<level[0]) and (level[0]<end[0]):
 						children.append(level)
 			subsec_sec[section] = children
-		sec_subsec = {}
-		
-		lista = list(subsec_sec.items())
-		for section,children in lista:
+		#Store subsections for each section in sec_subsec dict.
+		sec_subsec = {}		 
+		for section,children in list(subsec_sec.items()):
 			for (subsection,description) in subsections:
 				limits = subsection.split("-")
 				beg = limits[0]
@@ -347,14 +353,15 @@ class SpaICD10_Diag_Hierarchy():
 					
 			sec_subsec[section] = children
 		subsubsections = [(section,description) for (section,description) in subsections if section not in list(G.nodes())]
+		#There only subsubsections for subsection parent. Add them.
 		G.add_nodes_from(subsubsections)
 		parent = "T20-T32"
 		for (subsubsection,description) in subsubsections:
 			G.add_edge(parent,subsubsection)
 		
+		#Add codes from first level based on the sec_subsec dictionary.
 		level_1_keys = list(level_1_codes.keys())
 		for section, children in sec_subsec.items():
-
 			for child in children:
 				if len(child) == 3:
 					G.add_node(child)
@@ -379,38 +386,35 @@ class SpaICD10_Diag_Hierarchy():
 							G.add_nodes_from(codes)
 							for (c,d) in codes:
 								G.add_edge(subsubsection,c)
-		G.add_nodes_from(level_2_codes)
-		for level_1 in level_1_keys:
-			for (level_2,description) in level_2_codes:
-				if re.match(level_1,level_2):
-					G.add_edge(level_1,level_2)
+
+		G.add_nodes_from(level_2_codes) #Add nodes and edges from the second level.
+		for (level_2,description) in level_2_codes:
+			G.add_edge(level_2[:-2],level_2)
 		
-		G = self.add_level(G,level_2_codes,level_3_codes)
-		G = self.add_level(G,level_3_codes,level_4_codes)
-		G = self.add_level(G,level_4_codes,level_5_codes)
+		G = self.add_level(G,level_3_codes) #Add codes and edges of the level.
+		G = self.add_level(G,level_4_codes) #Add codes and edges of the level.
+		G = self.add_level(G,level_5_codes) #Add codes and edges of the level.
 		return G
 
 class SpaICD10_Prc_Hierarchy():
 	def __init__(self):
 
-		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_PROCEDIMIENTOS_CIE10ES_%20NUEVOS_BORRADOS_EDITADOS%20Y%20COMPLETA_20170921_632774861361197060.xlsx"
-
-		
+		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_PROCEDIMIENTOS_CIE10ES_%20NUEVOS_BORRADOS_EDITADOS%20Y%20COMPLETA_20170921_632774861361197060.xlsx" 
 		file, response = urllib.request.urlretrieve(url)
 		xls = pd.ExcelFile(file)
 		df1 = pd.read_excel(xls, 'completa',encoding="utf-8")
-		df2 = df1.groupby("codigo")
-		self.codes_descriptors = {r["codigo"] : {"description": r["descripcion"]} for i,r in df1.iterrows()}
-		#self.codes_descriptors = [(r["codigo"],{"full description": r["descripcion"]}) for i,r in df1.iterrows()]
+		self.codes_descriptors = {r["codigo"] : {"description": r["descripcion"]} for i,r in df1.iterrows()} #Store all codes and descriptions in a dict.
 
 	def stratify_codes(self,dictionary):
 
 		nodes = dictionary.keys()
 
+		#Chapters obtained from manual (see README).
 		chapters = [("0",{"description":"Médico-Quirúrgica"}),("1",{"description":"Obstetricia"}),("2",{"description":"Colocación"}),("3",{"description":"Administración"}),("4",{"description":"Medición y Monitorización"}),
 		("5",{"description":"Asistencia y Soporte Extracorpóreos"}),("6",{"description":"Terapias Extracorpóreas"}),("7",{"description":"Osteopatía"}),("8",{"description":"Otros Procedimientos"}),("9",{"description":"Quiropráctica"}),
 		("B",{"description":"Imagen"}),("C",{"description":"Medicina Nuclear"}),("D",{"description":"Radioterapia"}),("F",{"description":"Rehabilitación Física y Audiología Diagnóstica"}),("G",{"description":"Salud Mental"}),("H",{"description":"Tratamiento de Abuso de Sustancias"}),("X",{"description":"Nueva Tecnología"})]
 		
+		#Subsections descriptions that repeated.
 		subsect_desc_1 = {"A":{"description": "Sistemas Fisiológicos"},"B":{"description": "Sistema Respiratorio"},"C":{"description": "Dispositivo Permanente"},"D":{"description": "Sistema Gastrointestinal"},"E":{"description": "Sistemas Fisiológicos y Regiones Anatómicas"},
 						"F":{"description": "Sistema Hepatobiliar y Páncreas"},"G":{"description": "Sistema Endocrino"},"H":{"description": "Piel y Mama"},"J":{"description": "Tejido Subcutáneo y Fascia"},"K":{"description": "Músculos"},"L":{"description": "Tendones"},"M":{"description": "Bursas y Ligamentos"},
 						"N":{"description": "Huesos Cráneo y Cara"},"P":{"description": "Huesos Superiores"},"Q":{"description": "Huesos Inferiores"},"R":{"description": "Articulaciones Superiores"}, "S":{"description": "Articulaciones Inferiores"},
@@ -419,7 +423,7 @@ class SpaICD10_Prc_Hierarchy():
 						"0":{"description": "Sistema Nervioso Central"},"1":{"description": "Sistema Nervioso Periférico"},"2":{"description": "Corazón y Grandes Vasos"},"3":{"description": "Arterias Superiores"},"4":{"description": "Arterias Inferiores"},
 						"5":{"description": "Venas Superiores"},"6":{"description": "Venas Inferiores"},"7":{"description": "Sistemas Linfático y Hermático"},"8":{"description": "Ojo"},"9":{"description": "Oído, Nariz,Senos Paranasales"}
 						}
-
+		#Subsections descriptions that are unique.
 		subsect_desc_2 = {"30":{"description": "Circulatorio"},"10": {"description": "Embarazo"},"0W":{"description":"Regiones Anatómicas Generales"},"0C":{"description":"Boca y Garganta"},"B2":{"description":"Corazón"},"C2":{"description":"Corazón"},
 						"2Y":{"description":"Orificios Anatómicos"},"B5":{"description": "Venas"},"C5":{"description": "Venas"},"B7":{"description": "Sistema Linfático"},"C7":{"description": "Sistema Linfático"},"D7":{"description": "Sistema Linfático"},"B9":{"description": "Oído, Nariz, Boca y Garganta"},
 						"C9":{"description": "Oído, Nariz, Boca y Garganta"},"D9":{"description": "Oído, Nariz, Boca y Garganta"},"BH":{"description": "Piel, Tejido Subcutáneo y Mama"},
@@ -429,20 +433,20 @@ class SpaICD10_Prc_Hierarchy():
 						}
 		double_subsect = list(subsect_desc_2.keys())
 
-		subsections = []
-		level_1_codes = []
-		level_2_codes = []
-		level_3_codes = []
-		level_4_codes = []
-		level_5_codes = []
+		#Lists to store each level of hierarchy.
+		subsections = [] #BN
+		level_1_codes = [] #001
+		level_2_codes = [] #012Y
+		level_3_codes = [] #012YX
+		level_4_codes = [] #012YX0
+		level_5_codes = [] #012YX0Z
 
-
-		
+		#Stratify the codes		
 		for node in nodes:
-			level_1_codes.append((node[0:3],{"description": "no hay descripción"}))
-			level_2_codes.append((node[0:4],{"description": "no hay descripción"}))
-			level_3_codes.append((node[0:5],{"description": "no hay descripción"}))
-			level_4_codes.append((node[0:6],{"description": "no hay descripción"}))
+			level_1_codes.append((node[0:3],{"description": "no hay descripción"})) #Descriptions for this level could only be obtained hard coding each one from manual, thus "no description" was chosen.
+			level_2_codes.append((node[0:4],{"description": "no hay descripción"})) #Descriptions for this level could only be obtained hard coding each one from manual, thus "no description" was chosen.
+			level_3_codes.append((node[0:5],{"description": "no hay descripción"})) #Descriptions for this level could only be obtained hard coding each one from manual, thus "no description" was chosen.
+			level_4_codes.append((node[0:6],{"description": "no hay descripción"})) #Descriptions for this level could only be obtained hard coding each one from manual, thus "no description" was chosen.
 			level_5_codes.append((node[:],dictionary[node]))
 			if node[0:2] in double_subsect:
 				subsections.append((node[0:2],subsect_desc_2[node[0:2]]))
@@ -454,14 +458,16 @@ class SpaICD10_Prc_Hierarchy():
 	def build_graph(self):
 		''' Method that builds the hierarchy tree given the dictionary of codes with their description.'''
 		def add_level(G,list_codes_descriptions):
+			'''Method to add levels to the hierrchy.'''
 			G.add_nodes_from(list_codes_descriptions)
 			for (level,description) in list_codes_descriptions:
 				G.add_edge(level[0:-1],level)
 			return G
 
-
+		#Stratify the codes
 		chapters,subsections,level_1_codes,level_2_codes,level_3_codes,level_4_codes,level_5_codes = self.stratify_codes(self.codes_descriptors)
 
+		#Children of each chapter, stratified from manual
 		dict_sect = {"0": [
 							("001-00X",{"description":"Sistema Nervioso Central"}),("012-01X",{"description":"Sistema Nervioso Periférico"}),("021-02Y",{"description":"Corazón y Grandes Vasos"}),("031-03W",{"description":"Arterias Superiores"}),("041-04W",{"description":"Arterias Inferiores"}),
 							("051-05W",{"description":"Venas Superiores"}),("061-06W",{"description":"Venas Inferiores"}),("072-07Y",{"description":"Sistemas Linfático y Hemático"}),("080-08X",{"description":"Ojo"}),("090-09W",{"description":"Oído, Nariz, Senos Paranasales"}),
@@ -488,23 +494,25 @@ class SpaICD10_Prc_Hierarchy():
 					"H":[("HZ2-HZ9",{"description":"Sección Tratamiento de Abuso de Sustancias"})],
 					"X":[("X2A-XW0",{"description":"Sección Nueva Tecnología"})],
 					}
-
+		#Initialize graph to store hierarchy
 		G  = nx.DiGraph()
 		root_name = "root"
 		G.add_node(root_name)
+
+		#Add chapters. E.g.:"0","X", etc.
 		G.add_nodes_from(chapters)
-		G.add_nodes_from(subsections)
-		
 		for (chapter,description) in chapters:
 			G.add_edge(root_name,chapter)
 
-		list_sections = []
+		list_sections = [] #List to store the sections, used lter for reference for edges.
+		#Add sections. E.g.: "001-00X".
 		for chapter,sections in dict_sect.items():
 			G.add_nodes_from(sections)
 			for (section,description) in sections:
 				G.add_edge(chapter,section)
 				list_sections.append(section)
-			
+		#Add subsections. E.g.: "00","BN"
+		G.add_nodes_from(subsections)	
 		for (subsection,description) in subsections:
 			for section in list_sections:
 				if (section[0]=="0") and (subsection[0]=="0"):
@@ -513,11 +521,11 @@ class SpaICD10_Prc_Hierarchy():
 				elif (section[0]==subsection[0]):
 					G.add_edge(section,subsection)
 
-		G = add_level(G,level_1_codes)
-		G = add_level(G,level_2_codes)
-		G = add_level(G,level_3_codes)
-		G = add_level(G,level_4_codes)
-		G = add_level(G,level_5_codes)
+		G = add_level(G,level_1_codes)	#Add rest of the codes, level by level	
+		G = add_level(G,level_2_codes)	#Add rest of the codes, level by level
+		G = add_level(G,level_3_codes)	#Add rest of the codes, level by level
+		G = add_level(G,level_4_codes)	#Add rest of the codes, level by level
+		G = add_level(G,level_5_codes)	#Add rest of the codes, level by level
 
 		return G
 
