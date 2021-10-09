@@ -1,24 +1,15 @@
-from typing import List, Optional
-import warnings
-import tempfile
 import re
 import json
-from zipfile import ZipFile
-from pathlib import Path
 import requests
-import untangle
 import pandas as pd
 import networkx as nx
-
-
-import math
 import pickle
 import os
 import urllib
-import argparse
 
 
 class SpaICD_O_Hierarchy():
+	'''Class for the 2018 Spanish ICD-O hierarchy. '''
 	def __init__(self):
 
 		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_CIEO31_TABLA_%20REFERENCIA_con_6_7_caracteres_final_20180111_5375350050755186721_7033700654037542595.xlsx"
@@ -159,6 +150,7 @@ class SpaICD_O_Hierarchy():
 		return G
 
 class SpaICD10_Diag_Hierarchy():
+	'''Class for the 2018 Spanish ICD-Diagnosis hierarchy. '''
 	def __init__(self):
 		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_DIAGNOSTICOS_CIE10ES_REFERENCIA%20Y%20VALIDACION_20171211_7449731228183628205.xlsx"
 		file, response = urllib.request.urlretrieve(url)
@@ -397,6 +389,7 @@ class SpaICD10_Diag_Hierarchy():
 		return G
 
 class SpaICD10_Prc_Hierarchy():
+	'''Class for the 2018 Spanish ICD-Procedures hierarchy. '''
 	def __init__(self):
 
 		url = "https://eciemaps.mscbs.gob.es/ecieMaps/download?name=2018_PROCEDIMIENTOS_CIE10ES_%20NUEVOS_BORRADOS_EDITADOS%20Y%20COMPLETA_20170921_632774861361197060.xlsx" 
