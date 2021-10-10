@@ -1,45 +1,13 @@
 import os
-import random
-from collections import defaultdict, Counter
-import string
-from sklearn.preprocessing import MultiLabelBinarizer
-import pandas as pd
 import pickle
-import matplotlib.pyplot as plt
-import argparse
-import itertools
-import numpy as np
-from sklearn.preprocessing import normalize
-from utils import *
-import string
-from tqdm import tqdm
-import requests
-from bs4 import BeautifulSoup
-import json
-from torch import save
-import copy
 import requests
 import re
-import os
-import pickle as pkl
-
-from bs4 import BeautifulSoup
-from collections import defaultdict
-
-from typing import List, Optional
-import warnings
-import tempfile
-import re
 import json
-from zipfile import ZipFile
-from pathlib import Path
 import requests
 import untangle
 import pandas as pd
 import networkx as nx
-from networkx.algorithms.traversal.depth_first_search import dfs_tree
 
-import math
 
 class cantemist_codes:
 
@@ -93,15 +61,38 @@ class cantemist_hierarchy:
 			for section in list(self.H.neighbors(chapter)):
 				for level_1 in list(self.H.neighbors(section)):
 					self.level_1.append(level_1)
-		#for level_1 in self.level_1:
 					for level_2 in list(self.H.neighbors(level_1)):
 						self.level_2.append(level_2)
-		
-
-
 
 	def build_graph_dataset(self,codes):
 		'''Method that builds a directed graph for the dataset specificied, also returns a list of the codes in dataset but not in H.'''
+		def add_nd_codes(G,par,child):
+			'''Add codes with no description to graph. '''
+			G.add_node(child)
+			G.add_edge(par,child)
+			attrs = {child:{"full description": "no hay descripción", "short description": "ND"}}
+			nx.set_node_attributes(G,attrs)
+
+			return G
+		def build_descriptions(G,par,child):
+			'''Builds descriptions for six digits codes. Dictionaries obtained from manual.'''
+			#Dictionaries with descriptions for sixth digit. Needed to add codes in dataset but not in hierarchy.
+			full_sixth_digit = {"1":"grado I, bien diferenciado","2":"grado II, moderadamente diferenciado","3":"grado III, pobremente diferenciado","4":"grado IV, indiferenciado","5":"´célula T","6":"célula B","7":"célula nula","8":"célula NK","9":"no se ha determinado el grado o la célula"}
+			short_sixth_digit = {"1":"G1","2":"G2","3":"G3","4":"G4","5":"´célula T","6":"célula B","7":"célula nula","8":"célula NK","9":"GSD"}
+			
+			dict_attrs = G.nodes()[par]
+
+			full_str_to_add =full_sixth_digit[child[-1]]
+			short_str_to_add = short_sixth_digit[child[-1]]
+
+			full_old = dict_attrs["full description"]
+			short_old = dict_attrs["short description"]
+				
+			full_str = full_old + " - " + full_str_to_add
+			short_str = short_old + " - " + short_str_to_add
+			node = {child : {"full description": full_str, "short description": short_str}}
+
+			return node
 		
 		G = self.H.copy() #Rename it to be safe.
 		
@@ -114,115 +105,49 @@ class cantemist_hierarchy:
 			if section in list(G.nodes()):
 				if section not in codes and len(list(G.neighbors(section))) == 0:
 					G.remove_node(section) #Remove intermediate nodes not in dataset and without any children.
-					#if section == "8122/6":
-					#	print("PROBLEM")
 
 		for node in list(G.nodes()):
 			if node not in codes:
 				if len(list(G.neighbors(node))) == 0:
 					G.remove_node(node) #Remove superior nodes not in dataset and with no children.
 
-		full_sixth_digit = {"1":"grado I, bien diferenciado","2":"grado II, moderadamente diferenciado","3":"grado III, pobremente diferenciado","4":"grado IV, indiferenciado","5":"´célula T","6":"célula B","7":"célula nula","8":"célula NK","9":"no se ha determinado el grado o la célula"}
-		short_sixth_digit = {"1":"G1","2":"G2","3":"G3","4":"G4","5":"´célula T","6":"célula B","7":"célula nula","8":"célula NK","9":"GSD"}
+		codes_not_in_H = set(code for code in codes if code not in list(G.nodes())) #Set of codes in dataset but not in hierarchy.
 
-		codes_not_in_H = []
-		for code in codes:
-			if code not in list(G.nodes()):
-				codes_not_in_H.append(code)
-		nd_dict = {"full description": "no hay descripción", "short description": "ND"}
+		#Add codes in dataset and not in hierarchy. Examples of shape of codes in comments
 		for code in codes_not_in_H:
-			if "H" in code:
+			if "H" in code:#9735/6/H and 9735/66/H
 				c = code[:-2]
 				if c in list(G.nodes):
-					G.add_node(code) #1111/4
-					G.add_edge(c,code)
-					attrs = {code:nd_dict}
-					nx.set_node_attributes(G,attrs)
+					G = add_nd_codes(G,c,code)
 				elif c in list(self.H.nodes()):
 					parent = list(self.H.predecessors(c))[0]
 					if parent not in list(G.nodes()):	
 						grandparent = list(self.H.predecessors(parent))[0]
-						G.add_node(parent)
-						G.add_edge(grandparent,parent)
-						attrs = {parent:nd_dict}
-						nx.set_node_attributes(G,attrs)
-					G.add_node(code)
-					G.add_edge(parent,code)
-					attrs = {code:nd_dict}
-					nx.set_node_attributes(G,attrs)
+						G = add_nd_codes(G,grandparent,parent)
+					G = add_nd_codes(G,parent,code)
 				else:
 					co = code[:-3]
 					if (co not in list(G.nodes())) and (co in list(self.H.nodes())): #8815/11/H
 						cod = code[:-5]
-						G.add_node(co)
-						G.add_edge(cod,co)
-						attrs = {co:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(c)
-						G.add_edge(co,c)
-						attrs = {c:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(code)
-						G.add_edge(c,code)
-						attrs = {code:nd_dict}
-						nx.set_node_attributes(G,attrs)
-					elif code[:-4] in list(self.H.nodes()): #POSSIBLE BUG 8011/1/H
+						G = add_nd_codes(G,cod,co)
+					elif code[:-4] in list(self.H.nodes()):
 						if code[:-4] not in list(G.nodes()):
 							parent = list(self.H.predecessors(code[:-4]))[0]
-							G.add_node(code[:-4])
-							G.add_edge(parent,code[:-4])
-							attrs = {code[:-4]:nd_dict}
-							nx.set_node_attributes(G,attrs)
-						G.add_node(co)
-						G.add_edge(code[:-4],co)
-						attrs = {co:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(c)
-						G.add_edge(co,c)
-						attrs = {c:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(code)
-						G.add_edge(c,code)
-						attrs = {code:nd_dict}
-						nx.set_node_attributes(G,attrs)
+							G = add_nd_codes(G,parent,code[:-4])
+						G = add_nd_codes(G,code[:-4],co)
 					elif code[:-5] in list(self.H.nodes()):#8011/11/H
-						G.add_node(co)
-						G.add_edge(code[:-5],co)
-						attrs = {co:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(c)
-						G.add_edge(co,c)
-						attrs = {c:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(code)
-						G.add_edge(c,code)
-						attrs = {code:nd_dict}
-						nx.set_node_attributes(G,attrs)
-				#attrs = {code:nd_dict}
-				#nx.set_node_attributes(G,attrs)
-			elif (re.match("^[0-9]{4}/[0-9]{2}$",code)):
+						G = add_nd_codes(G,code[:-5],co)
+
+					G = add_nd_codes(G,co,c)
+					G = add_nd_codes(G,c,code)
+
+			elif (re.match("^[0-9]{4}/[0-9]{2}$",code)):#9080/63
 				c = code[:-1]
-				if c in list(G.nodes()):#9080/63
-					#try: #TEMPORARY
-					dict_attrs = G.nodes()[c]
-
-					full_str_to_add =full_sixth_digit[code[-1]]
-					short_str_to_add = short_sixth_digit[code[-1]]
-
-					full_old = dict_attrs["full description"]
-					short_old = dict_attrs["short description"]
-				
-					full_str = full_old + " - " + full_str_to_add
-					short_str = short_old + " - " + short_str_to_add
-					node = {code : {"full description": full_str, "short description": short_str}}
-					
+				if c in list(G.nodes()):
+					node = build_descriptions(G,c,code)
 					G.add_node(code)
 					nx.set_node_attributes(G,node)
 					G.add_edge(c,code)
-					#except:
-					#	G.add_node(code)
-					#	nx.set_node_attributes(G,node)
-					#	G.add_edge(c,code)
 										
 				elif c in list(self.H.nodes):
 					co = code[:-3]
@@ -233,82 +158,36 @@ class cantemist_hierarchy:
 						G.add_node(co)
 						parent = list(self.H.predecessors(co))[0]
 						G.add_edge(parent,co)
-						G.add_node(c)
-						nx.set_node_attributes(G,node)
-						G.add_edge(co,c)
-					else:
-						G.add_node(c)
-						nx.set_node_attributes(G,node)
-						G.add_edge(co,c)
+					G.add_node(c)
+					nx.set_node_attributes(G,node)
+					G.add_edge(co,c)
 
-					dict_attrs = G.nodes()[c]
-
-					full_str_to_add =full_sixth_digit[code[-1]]
-					short_str_to_add = short_sixth_digit[code[-1]]
-
-					full_old = dict_attrs["full description"]
-					short_old = dict_attrs["short description"]
-				
-					full_str = full_old + " - " + full_str_to_add
-					short_str = short_old + " - " + short_str_to_add
-					node = {code : {"full description": full_str, "short description": short_str}}
-
+					node = build_descriptions(G,c,code)
 					G.add_node(code)
 					nx.set_node_attributes(G,node)
 					G.add_edge(c,code)
 				else:
 					if code[:-3] in list(G.nodes()):
-						G.add_node(code[:-1])
-						G.add_edge(code[:-3],code[:-1])
-						attrs = {code[:-1]:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(code)
-						G.add_edge(code[:-1],code)
-						attrs = {code:nd_dict}
-						nx.set_node_attributes(G,attrs)
+						G = add_nd_codes(G,code[:-3],code[:-1])
+
 					elif code[:-3] in list(self.H.nodes()):
 						parent = list(self.H.predecessors(code[:-3]))[0]
-
-						G.add_node(code[:-3])
-						G.add_edge(parent,code[:-3])
-						attrs = {code[:-3]:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(code[:-1])
-						G.add_edge(code[:-3],code[:-1])
-						attrs = {code[:-1]:nd_dict}
-						nx.set_node_attributes(G,attrs)
-						G.add_node(code)
-						G.add_edge(code[:-1],code)
-						attrs = {code:nd_dict}
-						nx.set_node_attributes(G,attrs)
-			elif len(code) == 6:#9735/6 #BUG IN THIS SECTION
+						G = add_nd_codes(G,parent,code[:-3])
+						G = add_nd_codes(G,code[:-3],code[:-1])
+					G = add_nd_codes(G,code[:-1],code)
+			elif len(code) == 6:#9735/6
 				c = code[:-2]
 				if c not in list(G.nodes()):
 					parent = list(self.H.predecessors(c))[0]
-					G.add_node(c)
-					G.add_edge(parent,c)
-					attrs = {c:nd_dict}
-					nx.set_node_attributes(G,attrs)
-					G.add_node(code)
-					G.add_edge(c,code)
-					attrs = {code:nd_dict}
-					nx.set_node_attributes(G,attrs)
-				elif c in list(G.nodes()):
-					if code not in list(G.nodes()):
-						#print("?????")
-						G.add_node(code)
-						G.add_edge(c,code)
-						attrs = {code:nd_dict}
-						nx.set_node_attributes(G,attrs)
+					G = add_nd_codes(G,parent,c)
+					G = add_nd_codes(G,c,code)
+				elif (c in list(G.nodes())) and (code not in list(G.nodes())):
+					G = add_nd_codes(G,c,code)
 
-		codes_not_in_H = [code for code in codes_not_in_H if code not in list(G.nodes())]
+
+		#codes_not_in_H = set(code for code in codes_not_in_H if code not in list(G.nodes())) #Security check to ensure that all codes have benn added.
 
 		return G
-
-	def combine_graphs(self,graph1,graph2):
-		''' Method that combines graphs '''
-		graph1 = nx.compose(graph2,graph1)
-		return graph1
 
 	def out_graph(self,graph,out_path,out_file):
 		''' Method that saves a directed graph in a json and a pickle file. '''
@@ -323,51 +202,30 @@ class cantemist_hierarchy:
 		pickle.dump(j, dbfile)                     
 		dbfile.close()
 
-def write_list(list_codes,task,out_path,out_file):
-	'''Function that writes a list in a txt. file, used for unseen codes.'''
-	with open(out_path + out_file, "w",encoding='UTF-8') as f:
-		f.write("Codes not in hierarchy from task " + task + "\n")
-		for code in list_codes:
-			f.write(code + "\n")
 
 
-
-if __name__ == '__main__':
-
-
+def main():
 	gen = cantemist_hierarchy()
 	codes = cantemist_codes()
+	tasks = ["coding","norm"]
+	sections = ["train","dev1","dev2","test"]
+	output_directory = "data/hierarchical_data/sp/cantemist/"
 
-	#Train, dev and test for coding task.
-	train_codes = codes.coding_codes("cantemist/train-set/cantemist-coding/","train-coding.tsv")
-	train_G = gen.build_graph_dataset(train_codes)
-	gen.out_graph(train_G,"data/hierarchical_data/sp/cantemist/","cantemist-train-coding")
+	for task in tasks:
+		for section in sections:
+			if ("1" in section) or ("2" in section):
+				name = section[0:3]+ "-set" + section[-1]
+			else:
+				name = section + "-set"
+			source_directory = "cantemist/" + name + "/cantemist-" + task + "/" 
+			output_file = "cantemist-" + section + "-" + task
+			if task == "coding":
+				source_file = section + "-" + task + ".tsv"
+				set_codes = codes.coding_codes(source_directory,source_file)
+			else:
+				set_codes = codes.norm_codes(source_directory)
+			hierarchy = gen.build_graph_dataset(set_codes)
+			gen.out_graph(hierarchy,output_directory,output_file)
 
-	dev1_codes = codes.coding_codes("cantemist/dev-set1/cantemist-coding/","dev1-coding.tsv")
-	dev1_G = gen.build_graph_dataset(dev1_codes)
-	gen.out_graph(dev1_G,"data/hierarchical_data/sp/cantemist/","cantemist-dev1-coding")
-
-	dev2_codes = codes.coding_codes("cantemist/dev-set2/cantemist-coding/","dev2-coding.tsv")
-	dev2_G = gen.build_graph_dataset(dev2_codes)
-	gen.out_graph(dev2_G,"data/hierarchical_data/sp/cantemist/","cantemist-dev2-coding")
-
-	test_codes = codes.coding_codes("cantemist/test-set/cantemist-coding/","test-coding.tsv")
-	test_G = gen.build_graph_dataset(test_codes)
-	gen.out_graph(test_G,"data/hierarchical_data/sp/cantemist/","cantemist-test-coding")
-#
-#	##Train, dev and test for norm task.
-	train_norm_codes = codes.norm_codes("cantemist/train-set/cantemist-norm/")
-	train_norm_G = gen.build_graph_dataset(train_norm_codes)
-	gen.out_graph(train_norm_G,"data/hierarchical_data/sp/cantemist/","cantemist-train-norm")
-#
-	dev1_norm_codes = codes.norm_codes("cantemist/dev-set1/cantemist-norm/")
-	dev1_norm_G = gen.build_graph_dataset(dev1_norm_codes)
-	gen.out_graph(dev1_norm_G,"data/hierarchical_data/sp/cantemist/","cantemist-dev1-norm")
-#
-	dev2_norm_codes = codes.norm_codes("cantemist/dev-set2/cantemist-norm/")
-	dev2_norm_G = gen.build_graph_dataset(dev2_norm_codes)
-	gen.out_graph(dev2_norm_G,"data/hierarchical_data/sp/cantemist/","cantemist-dev2-norm")
-
-	test_norm_codes = codes.norm_codes("cantemist/test-set/cantemist-norm/")
-	test_norm_G = gen.build_graph_dataset(test_norm_codes)
-	gen.out_graph(train_norm_G,"data/hierarchical_data/sp/cantemist/","cantemist-test-norm")
+if __name__ == '__main__':
+	main()
