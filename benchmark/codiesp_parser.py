@@ -51,16 +51,19 @@ def get_codes(dataset_path,file):
 			codes = set(l.split('\t')[1].upper() for l in f.read().splitlines()[:])
 		return codes
 
-def get_codes2(dataset_path,file):
+def get_codes_x(dataset_path,file):
 		''' Method that get the codes for one subset of the coding task.'''
-		codes = set()
+		diagnosis = set()
+		procedure = set()
 		with open(dataset_path + file) as f:
 			#codes = set(l.split('\t')[1].upper() 
 			for l in f.read().splitlines()[:]:
-				#codes.add(l.split('\t')[1].upper())
-				if len(l.split('\t')[1].upper())<4:
-					print(l.split('\t')[1].upper())
-		return codes
+				columns = l.split('\t')
+				if columns[1].upper() == "DIAGNOSTICO":
+					diagnosis.add(columns[2].upper())
+				else:
+					procedure.add(columns[2].upper())
+		return diagnosis,procedure
 
 
 class codiesp_hierarchy:
@@ -250,6 +253,39 @@ class codiesp_proc_hierarchy:
 		dbfile = open(out_path + out_file + '.p', 'ab') 
 		pickle.dump(j, dbfile)                     
 		dbfile.close()
+def combine_graphs(HD,HP):
+	#HD = nx.relabel_nodes(HD, {"root":"root diagnosis"})
+	#HP = nx.relabel_nodes(HP, {"root":"root procedures"})
+	#G = nx.disjoint_union(HD,HP)
+	G  = nx.DiGraph()
+	#root_name = "main root"
+	#G.add_node(root_name)
+	#G.add_nodes_from(HD)
+	##G.add_edges_from(list(HD.edges()))
+	#G.add_edge(root_name,"root diagnosis")
+	##G.add_nodes_from(HP)
+	##G.add_edges_from(list(HP.edges()))
+	#G.add_edge(root_name,"root procedures")
+	#for node in list(G.nodes()):
+	#	print(G.in_edges(node))
+	G.add_edges_from(HD.edges(data=True))
+	G.add_edges_from(HP.edges(data=True))
+	G.add_nodes_from(HD.nodes(data=True))
+	G.add_nodes_from(HP.nodes(data=True))
+	return G
+
+def out_graph(graph,out_path,out_file):
+	''' Method that saves a directed graph in a json and a pickle file. '''
+	if not os.path.exists(out_path):
+		os.makedirs(out_path)
+	with open(out_path + out_file + ".json", "w",encoding='UTF-8') as f:
+	    root_node, *_ = nx.topological_sort(graph)
+	    j = {"tree":nx.readwrite.json_graph.tree_data(graph, root_node)}
+	    json.dump(j, f,indent=2,ensure_ascii=False)
+	#Save final graph in a pickle file.
+	dbfile = open(out_path + out_file + '.p', 'ab') 
+	pickle.dump(j, dbfile)                     
+	dbfile.close()
 
 def main():
 	#DIAGNOSIS
@@ -270,19 +306,45 @@ def main():
 	#diag.out_graph(test_diag_G,"data/hierarchical_data/sp/codiesp/","codiesp-test-diag")
 
 	proc = codiesp_proc_hierarchy("icd-proc-sp.json")
-	train_proc_codes = get_codes(codiesp_path,"train/trainP.tsv")
-	train_proc_G,train_proc_not_in_H = proc.build_graph_dataset(train_proc_codes)
-	proc.out_graph(train_proc_G,"data/hierarchical_data/sp/codiesp/","codiesp-train-proc")
-	
-	dev_proc_codes = get_codes(codiesp_path,"dev/devP.tsv")
-	dev_proc_G,dev_proc_not_in_H = proc.build_graph_dataset(dev_proc_codes)
-	proc.out_graph(dev_proc_G,"data/hierarchical_data/sp/codiesp/","codiesp-dev-proc")	
+	#train_proc_codes = get_codes(codiesp_path,"train/trainP.tsv")
+	#train_proc_G,train_proc_not_in_H = proc.build_graph_dataset(train_proc_codes)
+	#proc.out_graph(train_proc_G,"data/hierarchical_data/sp/codiesp/","codiesp-train-proc")
+	#
+	#dev_proc_codes = get_codes(codiesp_path,"dev/devP.tsv")
+	#dev_proc_G,dev_proc_not_in_H = proc.build_graph_dataset(dev_proc_codes)
+	#proc.out_graph(dev_proc_G,"data/hierarchical_data/sp/codiesp/","codiesp-dev-proc")	
+#
+#	#test_proc_codes = get_codes(codiesp_path,"test/testP.tsv")
+#	#test_proc_G,test_proc_not_in_H = proc.build_graph_dataset(test_proc_codes)
+	#proc.out_graph(test_proc_G,"data/hierarchical_data/sp/codiesp/","codiesp-test-proc")
 
-	test_proc_codes = get_codes(codiesp_path,"test/testP.tsv")
-	test_proc_G,test_proc_not_in_H = proc.build_graph_dataset(test_proc_codes)
-	proc.out_graph(test_proc_G,"data/hierarchical_data/sp/codiesp/","codiesp-test-proc")
+	train_x_diag,train_x_proc = get_codes_x(codiesp_path,"train/trainX.tsv")
+	train_x_diag_G,train_x_diag_not_in_H = diag.build_graph_dataset(train_x_diag)
+	train_x_proc_G,train_x_proc_not_in_H = proc.build_graph_dataset(train_x_proc)
+	with open("data/hierarchical_data/sp/codiesp/"+"codiesp-train-x" + ".json", "w",encoding='UTF-8') as f:
+	    root_node, *_ = nx.topological_sort(train_x_diag_G)
+	    root_node_2,*_ = nx.topological_sort(train_x_proc_G)
+	    j = {"tree diagnosis":nx.readwrite.json_graph.tree_data(train_x_diag_G, root_node),"tree procedures":nx.readwrite.json_graph.tree_data(train_x_proc_G, root_node)}
+	    json.dump(j, f,indent=2,ensure_ascii=False)
+	dev_x_diag,dev_x_proc = get_codes_x(codiesp_path,"dev/devX.tsv")
+	dev_x_diag_G,dev_x_diag_not_in_H = diag.build_graph_dataset(dev_x_diag)
+	dev_x_proc_G,dev_x_proc_not_in_H = proc.build_graph_dataset(dev_x_proc)
+	with open("data/hierarchical_data/sp/codiesp/"+"codiesp-dev-x" + ".json", "w",encoding='UTF-8') as f:
+	    root_node, *_ = nx.topological_sort(dev_x_diag_G)
+	    root_node_2,*_ = nx.topological_sort(dev_x_proc_G)
+	    j = {"tree diagnosis":nx.readwrite.json_graph.tree_data(dev_x_diag_G, root_node),"tree procedures":nx.readwrite.json_graph.tree_data(dev_x_proc_G, root_node)}
+	    json.dump(j, f,indent=2,ensure_ascii=False)
 
-	
+
+	test_x_diag,test_x_proc = get_codes_x(codiesp_path,"test/testX.tsv")
+	test_x_diag_G,test_x_diag_not_in_H = diag.build_graph_dataset(test_x_diag)
+	test_x_proc_G,test_x_proc_not_in_H = proc.build_graph_dataset(test_x_proc)
+	with open("data/hierarchical_data/sp/codiesp/"+"codiesp-test-x" + ".json", "w",encoding='UTF-8') as f:
+	    root_node, *_ = nx.topological_sort(test_x_diag_G)
+	    root_node_2,*_ = nx.topological_sort(test_x_proc_G)
+	    j = {"tree diagnosis":nx.readwrite.json_graph.tree_data(test_x_diag_G, root_node),"tree procedures":nx.readwrite.json_graph.tree_data(test_x_proc_G, root_node)}
+	    json.dump(j, f,indent=2,ensure_ascii=False)
+
 
 
 if __name__ == '__main__':
