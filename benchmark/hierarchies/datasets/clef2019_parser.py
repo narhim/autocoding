@@ -1,25 +1,8 @@
-import os
-import pickle
-#import itertools
-#from utils import *
-#import string
-#from tqdm import tqdm
-import requests
-import json
-#from torch import save
-#import copy
-#import warnings
-#import tempfile
-import re
-import json
-#from zipfile import ZipFile
-#from pathlib import Path
-#import requests
-import untangle
-import networkx as nx
-#from networkx.algorithms.traversal.depth_first_search import dfs_tree
 
-#import math
+import json
+import re
+import networkx as nx
+import common
 
 class clef2019_hierarchy:
 	def __init__(self):
@@ -91,27 +74,12 @@ class clef2019_hierarchy:
 			for node in section:
 				G.add_edge(chapter,node[0]) #Till here, non-extant hierarchy of clef 2019
 
-		return G,codes
+		return G
 
 	def combine_graphs(self,graph1,graph2):
 		''' Method that combines graphs '''
 		graph1 = nx.compose(graph2,graph1)
 		return graph1
-
-	def out_graph(self,graph,out_path,out_file):
-		''' Method that saves a directed graph in a json and a pickle file. '''
-		#Specific to graph
-		if not os.path.exists(out_path):
-			os.makedirs(out_path)
-		with open(out_path + out_file + ".json", "w",encoding='UTF-8') as f:
-		            root_node, *_ = nx.topological_sort(graph)
-		            j = {"tree":nx.readwrite.json_graph.tree_data(graph, root_node)}
-		            json.dump(j, f,indent=2,ensure_ascii=False)
-		#Save final graph in a pickle file.
-		dbfile = open(out_path + out_file + '.p', 'ab') 
-		pickle.dump(j, dbfile)                     
-		dbfile.close()
-
 
 
 def main():
@@ -119,13 +87,27 @@ def main():
 	gen = clef2019_hierarchy()
 
 	#Train_dev graph
-	train_dev_G,train_dev_codes = gen.build_graph_dataset("clef2019/","train_dev/anns_train_dev.txt")
-	gen.out_graph(train_dev_G,"data/hierarchical_data/de/clef2019/","clef2019_train_dev")
+	#train_dev_G = gen.build_graph_dataset("clef2019/","train_dev/anns_train_dev.txt")
+#	#common.out_graph(train_dev_G,"data/hierarchical_data/de/clef2019/","clef2019_train_dev")
+#
+	##Test graph
+	#test_G = gen.build_graph_dataset("clef2019/","test/anns_test.txt")
+	#common.out_graph(test_G,"data/hierarchical_data/de/clef2019/","clef2019_test")
 
-	#Test graph
-	test_G, test_codes = gen.build_graph_dataset("clef2019/","test/anns_test.txt")
-	gen.out_graph(test_G,"data/hierarchical_data/de/clef2019/","clef2019_test")
+	dataset_dir = "clef2019/"
+	output_dir = "data/hierarchical_data/de/clef2019/"
 
+	args = common.args_parser()
+
+	if args.partition == "train_dev":
+		dataset_file = "train_dev/anns_train_dev.txt"
+		output_file = "clef2019_train_dev"
+	else:
+		dataset_file = "test/anns_test.txt"
+		output_file = "clef2019_test"
+
+	graph = gen.build_graph_dataset(dataset_dir,dataset_file)
+	common.out_graph(graph,output_dir,output_file)
 
 if __name__ == '__main__':
 

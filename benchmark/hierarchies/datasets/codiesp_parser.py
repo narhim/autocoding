@@ -1,49 +1,11 @@
 #!/usr/bin/env python3
 
 import os
-import random
-from collections import defaultdict, Counter
-import string
-from sklearn.preprocessing import MultiLabelBinarizer
-import pandas as pd
 import pickle
-import matplotlib.pyplot as plt
-import argparse
-import itertools
-import numpy as np
-from sklearn.preprocessing import normalize
-from utils import *
-import string
-from tqdm import tqdm
-import requests
-from bs4 import BeautifulSoup
-import json
-from torch import save
-import copy
-import requests
-import re
-import os
-import pickle as pkl
-
-from bs4 import BeautifulSoup
-from collections import defaultdict
-
-from typing import List, Optional
-import warnings
-import tempfile
 import re
 import json
-from zipfile import ZipFile
-from pathlib import Path
-import requests
-import untangle
-import pandas as pd
 import networkx as nx
-from networkx.algorithms.traversal.depth_first_search import dfs_tree
 
-import math
-
-import timeit
 
 def get_codes(dataset_path,file):
 		''' Method that get the codes for one subset of the coding task.'''
@@ -108,9 +70,9 @@ class codiesp_hierarchy:
 		'''Method that builds a directed graph for the dataset specificied, also returns a list of the codes in dataset but not in H.'''
 
 		G = self.H.copy() #Rename it to be safe.
-		for level_5 in self.level_5_codes:
-			if (level_5 not in codes) and (level_5 in list(G.nodes())):
-				G.remove_node(level_5) #Start by removing final nodes not in dataset.
+		not_in_5 = [level_5 for level_5 in self.level_5_codes if (level_5 not in codes) and (level_5 in list(G.nodes()))]
+		for l in not_in_5:
+			G.remove_node(l)#Start by removing final nodes not in dataset.
 
 		for level_4 in self.level_4_codes:
 			if level_4 in list(G.nodes()):
@@ -126,6 +88,7 @@ class codiesp_hierarchy:
 			if level_2 in list(G.nodes()):
 				if level_2 not in codes and len(list(G.neighbors(level_2))) == 0:
 					G.remove_node(level_2) #Remove intermediate nodes not in dataset and without any children.
+
 		for level_1 in self.level_1_codes:
 			if level_1 in list(G.nodes()):
 				if level_1 not in codes and len(list(G.neighbors(level_1))) == 0:
@@ -135,7 +98,6 @@ class codiesp_hierarchy:
 			if node not in codes:
 				if len(list(G.neighbors(node))) == 0:
 					G.remove_node(node) #Remove superior nodes not in dataset and with no children.
-
 		return G
 
 	def out_graph(self,graph,out_path,out_file):
@@ -260,34 +222,22 @@ def main():
 	output_path = "data/hierarchical_data/sp/codiesp/"
 	sections = ["train","dev","test"]
 
-
-
-	start = timeit.default_timer()
 	for section in sections:
 		set_codes = get_codes(codiesp_path,section + "/" + section + "D.tsv")
 		graph = diag.build_graph_dataset(set_codes)
 		write.out_graph(graph,output_path,"codiesp-" + section + "-diag")
-	stop = timeit.default_timer()
-
-	print('Time: ', stop - start)
-	start = timeit.default_timer()
+	
 	for section in sections:
 		set_codes = get_codes(codiesp_path,section + "/" + section + "P.tsv")
 		graph = proc.build_graph_dataset(set_codes)
 		write.out_graph(graph,output_path,"codiesp-" + section + "-proc")	
-	stop = timeit.default_timer()
 
-	print('Time: ', stop - start)
-	start = timeit.default_timer()
+
 	for section in sections:
 		diag_set_codes,proc_set_codes = get_codes_x(codiesp_path,section + "/" + section + "X.tsv")
 		graph_diag = diag.build_graph_dataset(diag_set_codes)
 		graph_proc = proc.build_graph_dataset(proc_set_codes)
 		write.out_graphs(graph_diag,graph_proc,output_path,"codiesp-" + section + "-x")
-	stop = timeit.default_timer()
-	
-
-	print('Time: ', stop - start)
 
 if __name__ == '__main__':
 	main()
