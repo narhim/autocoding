@@ -1,4 +1,4 @@
-# Codes Classification Datasets
+# Clinical Codes Classification Datasets
 
 This repository hosts scripts for publicly available datasets for the task of automatic clinical codes classification. Currently, it supports `clefnts`, `codiesp` and `cantemist`.
 
