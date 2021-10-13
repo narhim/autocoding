@@ -3,7 +3,7 @@ import pickle
 import re
 import json
 import networkx as nx
-
+import common
 
 class cantemist_codes:
 
@@ -203,25 +203,27 @@ class cantemist_hierarchy:
 def main():
 	gen = cantemist_hierarchy()
 	codes = cantemist_codes()
-	tasks = ["coding","norm"]
-	sections = ["train","dev1","dev2","test"]
+
 	output_directory = "data/hierarchical_data/sp/cantemist/"
 
-	for task in tasks:
-		for section in sections:
-			if ("1" in section) or ("2" in section):
-				name = section[0:3]+ "-set" + section[-1]
-			else:
-				name = section + "-set"
-			source_directory = "cantemist/" + name + "/cantemist-" + task + "/" 
-			output_file = "cantemist-" + section + "-" + task
-			if task == "coding":
-				source_file = section + "-" + task + ".tsv"
-				set_codes = codes.coding_codes(source_directory,source_file)
-			else:
-				set_codes = codes.norm_codes(source_directory)
-			hierarchy = gen.build_graph_dataset(set_codes)
-			gen.out_graph(hierarchy,output_directory,output_file)
+	args = common.args_parser()
+	
+	if ("1" in args.partition) or ("2" in args.partition):
+		name = args.partition[0:3]+ "-set" + args.partition[-1]
+	else:
+		name = args.partition + "-set"
+	source_directory = "cantemist/" + name + "/cantemist-" + args.task + "/" 
+	output_file = "cantemist-" + args.partition + "-" + args.task
 
+	if args.task == "coding":
+		source_file = args.partition + "-" + args.task + ".tsv"
+		set_codes = codes.coding_codes(source_directory,source_file)
+	else:
+		set_codes = codes.norm_codes(source_directory)
+	hierarchy = gen.build_graph_dataset(set_codes)
+	common.out_graph(hierarchy,output_directory,output_file)
+
+	
+	
 if __name__ == '__main__':
 	main()

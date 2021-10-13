@@ -86,14 +86,6 @@ def main():
 
 	gen = clef2019_hierarchy()
 
-	#Train_dev graph
-	#train_dev_G = gen.build_graph_dataset("clef2019/","train_dev/anns_train_dev.txt")
-#	#common.out_graph(train_dev_G,"data/hierarchical_data/de/clef2019/","clef2019_train_dev")
-#
-	##Test graph
-	#test_G = gen.build_graph_dataset("clef2019/","test/anns_test.txt")
-	#common.out_graph(test_G,"data/hierarchical_data/de/clef2019/","clef2019_test")
-
 	dataset_dir = "clef2019/"
 	output_dir = "data/hierarchical_data/de/clef2019/"
 
