@@ -8,7 +8,8 @@ def main():
     args = cl_parser()
     print(args)
 
-    if args.data_dir == "clef2019":
+    if args.data_dir == "clefnts":
+        args.data_dir = "clefnts/data"
         clef_19_preprocess = Preprocess(args)
         clef_19_preprocess.create_dataset_json()
         clef_19_preprocess.plot_label_distribution()
@@ -82,7 +83,7 @@ def main():
                 codi_clef = CodiespToClef2019(args)
                 codi_clef.copy_doc_files()
         else:
-            args.data_dir = "codiesp_clef"
+            args.data_dir = "codiesp/data"
             codiesp_preprocess = PreprocessCodiesp(args)
             codiesp_preprocess.create_dataset_json()
 
@@ -142,7 +143,7 @@ def main():
             # same approach as preprocessing from codiesp_clef
             # use cl arguments to specify partition and track
             # only esp for language option
-            args.data_dir = "cantemist_clef"
+            args.data_dir = "cantemist/data"
             cantemist_preprocess = PreprocessCodiesp(args)
             cantemist_preprocess.create_dataset_json()
 

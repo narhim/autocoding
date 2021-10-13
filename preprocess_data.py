@@ -637,7 +637,7 @@ class CodiespToClef2019:
             else self.data_dir / f"text_files_{args.lang}"
 
         # output to clef2019 args and paths
-        self.out_root_dir = Path(__file__).resolve().parent / f"{args.data_dir}_clef"
+        self.out_root_dir = Path(__file__).resolve().parent / f"{args.data_dir}" / "data"
         self.out_dir = self.out_root_dir / args.partition if args.partition == "test" \
             else self.out_root_dir / f"train_dev"
 
