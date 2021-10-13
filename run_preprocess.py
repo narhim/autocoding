@@ -28,7 +28,7 @@ def main():
             print(second_compared_args)
             clef_19_preprocess.write_unseen_labels(second_compared_args)
 
-    elif args.data_dir == "guttman":
+    elif args.data_dir == "guttmann":
         print(args)
         if args.partition == "all":
             guttmann_preprocess = PreprocessGuttman(args)
@@ -39,6 +39,7 @@ def main():
             guttmann_preprocess.write_partition_files(partition_name="training", random_state=args.random_state)
             guttmann_preprocess.write_partition_files(partition_name="development", random_state=args.random_state)
         else:
+            args.data_dir = "guttmann/data" 
             guttman_postprocess = Preprocess(args)
             guttman_postprocess.create_dataset_json()
             guttman_postprocess.plot_label_distribution()

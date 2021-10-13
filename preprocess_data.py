@@ -563,6 +563,8 @@ class PreprocessGuttman(Preprocess):
     def write_partition_files(self, partition_name="test", random_state=35):
         # for training/development; store both training/development under train_dev
         cl_partition = partition_name
+        data_dir = self.data_dir / "data"
+        data_dir.mkdir(exist_ok=True)
 
         if partition_name != "test":
             partition_name = "train_dev"
@@ -574,15 +576,15 @@ class PreprocessGuttman(Preprocess):
         assert len(self.partitions[cl_partition]) == len(
             self.partitions_labels[cl_partition]), f"Docs - Labels Mismatch!!"
         try:
-            partition_dir = self.data_dir / partition_name
+            partition_dir = data_dir / partition_name
             partition_dir.mkdir(parents=True, exist_ok=False)
             print(f"{partition_dir} created to store {partition_name} files.")
         except FileExistsError:
             print(f"{partition_dir} already exists! Files will be saved here.")
 
         try:
-            partition_doc_dir = self.data_dir / partition_name / "docs" if partition_name == "test" \
-                else self.data_dir / partition_name / "docs-training"
+            partition_doc_dir = data_dir / partition_name / "docs" if partition_name == "test" \
+                else data_dir / partition_name / "docs-training"
             partition_doc_dir.mkdir(parents=True, exist_ok=False)
             print(f"{partition_doc_dir} created to store {partition_name} docs files.")
         except FileExistsError:
