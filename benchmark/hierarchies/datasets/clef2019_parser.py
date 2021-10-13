@@ -1,45 +1,25 @@
 import os
-import random
-from collections import defaultdict, Counter
-import string
-from sklearn.preprocessing import MultiLabelBinarizer
-import pandas as pd
 import pickle
-import matplotlib.pyplot as plt
-import argparse
-import itertools
-import numpy as np
-from sklearn.preprocessing import normalize
-from utils import *
-import string
-from tqdm import tqdm
+#import itertools
+#from utils import *
+#import string
+#from tqdm import tqdm
 import requests
-from bs4 import BeautifulSoup
 import json
-from torch import save
-import copy
-import requests
-import re
-import os
-import pickle as pkl
-
-from bs4 import BeautifulSoup
-from collections import defaultdict
-
-from typing import List, Optional
-import warnings
-import tempfile
+#from torch import save
+#import copy
+#import warnings
+#import tempfile
 import re
 import json
-from zipfile import ZipFile
-from pathlib import Path
-import requests
+#from zipfile import ZipFile
+#from pathlib import Path
+#import requests
 import untangle
-import pandas as pd
 import networkx as nx
-from networkx.algorithms.traversal.depth_first_search import dfs_tree
+#from networkx.algorithms.traversal.depth_first_search import dfs_tree
 
-import math
+#import math
 
 class clef2019_hierarchy:
 	def __init__(self):
@@ -134,15 +114,7 @@ class clef2019_hierarchy:
 
 
 
-
-#Retrieve hierarchy from pickle file (not working at the moment)
-#dict_hierarchy = pickle.load( open( "data/hierarchical_data/de/icd10gm_2019.p", "rb" ) )
-#H = nx.readwrite.json_graph.tree_graph(dict_hierarchy,ident='root')
-#G = nx.from_dict_of_dicts(dict_hierarchy)
-
-
-
-if __name__ == '__main__':
+def main():
 
 	gen = clef2019_hierarchy()
 
@@ -153,10 +125,10 @@ if __name__ == '__main__':
 	#Test graph
 	test_G, test_codes = gen.build_graph_dataset("clef2019/","test/anns_test.txt")
 	gen.out_graph(test_G,"data/hierarchical_data/de/clef2019/","clef2019_test")
-	
-	#All graph
-	test_train_dev_G = gen.combine_graphs(train_dev_G,test_G)
-	gen.out_graph(test_train_dev_G,"data/hierarchical_data/de/clef2019/","clef2019")
 
+
+if __name__ == '__main__':
+
+	main()
 
 

@@ -1,41 +1,16 @@
-import os
-import random
-from collections import defaultdict, Counter
-import string
-from sklearn.preprocessing import MultiLabelBinarizer
-import pandas as pd
+#Code bsed on katrynchapman's ICDHierarchyParser.py 
+#Libraries and modules
+from collections import defaultdict
 import pickle
-import matplotlib.pyplot as plt
-import argparse
-import itertools
-import numpy as np
-from sklearn.preprocessing import normalize
-from utils import *
-import string
-from tqdm import tqdm
 import requests
 from bs4 import BeautifulSoup
 import json
-from torch import save
 import copy
 import requests
 import re
 import os
-import pickle as pkl
-
 from bs4 import BeautifulSoup
-from collections import defaultdict
-
-from typing import List, Optional
-import warnings
-import tempfile
-import re
-import json
-from zipfile import ZipFile
-from pathlib import Path
-import requests
 import untangle
-import pandas as pd
 import networkx as nx
 
 
@@ -163,18 +138,10 @@ class GermanICD10Hierarchy:
         for parent, children in tree.items():
             for child in children:
                 child2parent_dict[child] = parent
-        #save(child2parent_dict, os.path.join(self.hier_data_path, 'child2parent.p'))
 
         all_codes = set(tree.keys()).union(set([i for j in tree.values() for i in j]))
         idx2code = {i: code for i, code in enumerate(all_codes)}
         code2idx = {v: k for k, v in idx2code.items()}
-
-        #with open(os.path.join(self.hier_data_path, 'icd10hierarchy.txt'), 'w') as f:
-        #    for parent, children in tree.items():
-        #        for child in children:
-        #            f.write(str(code2idx[parent]) + ' ' + str(code2idx[child]) + '\n')
-        #save(idx2code, os.path.join(self.hier_data_path, 'idx2icd10.p'))
-        #save(code2idx, os.path.join(self.hier_data_path, 'icd102idx.p'))
 
 
     def get_single_codes(self):
@@ -208,6 +175,7 @@ class GermanICD10Hierarchy:
 
             rget = requests.get(url)
             soup = BeautifulSoup(rget.text, "lxml")
+            #content.decode('utf-8','ignore')
             w = soup.findAll("a", {"class": "code"}) #html object with single codes.
             y = soup.findAll("span", {"class": "label"})#html object with single code descriptions. BUG: already here the encoding disappears, don't know why.
 
@@ -284,6 +252,8 @@ class GermanICD10Hierarchy:
         pickle.dump(j, dbfile)                     
         dbfile.close()
 
-if __name__ == '__main__':
+def main():
     gen = GermanICD10Hierarchy()
+if __name__ == '__main__':
+    main()
 
