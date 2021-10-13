@@ -216,33 +216,11 @@ def main():
 	#Get the hierarchies
 	diag = codiesp_hierarchy("icd-diag-sp.json")
 	proc = codiesp_proc_hierarchy("icd-proc-sp.json")
-	#write = write_graph()
 
 	codiesp_path = "codiesp/final_dataset_v4_to_publish/"
 	output_path = "data/hierarchical_data/sp/codiesp/"
-	#sections = ["train","dev","test"]
-#
-	#for section in sections:
-	#	set_codes = get_codes(codiesp_path,section + "/" + section + "D.tsv")
-	#	graph = diag.build_graph_dataset(set_codes)
-	#	common.out_graph(graph,output_path,"codiesp-" + section + "-diag")
-	#
-	#for section in sections:
-	#	set_codes = get_codes(codiesp_path,section + "/" + section + "P.tsv")
-#	#	graph = proc.build_graph_dataset(set_codes)
-#	#	common.out_graph(graph,output_path,"codiesp-" + section + "-proc")	
-#
-#
-#	#for section in sections:
-#	#	diag_set_codes,proc_set_codes = get_codes_x(codiesp_path,section + "/" + section + "X.tsv")
-#	#	graph_diag = diag.build_graph_dataset(diag_set_codes)
-#	#	graph_proc = proc.build_graph_dataset(proc_set_codes)
-	#	common.out_graphs(graph_diag,graph_proc,output_path,"codiesp-" + section + "-x")
-
 
 	args = common.args_parser()
-
-	
 
 	if args.task == "diagnosis":
 		set_codes = get_codes(codiesp_path,args.partition + "/" + args.partition + "D.tsv")
